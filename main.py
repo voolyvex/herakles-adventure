@@ -3,6 +3,7 @@ import random
 import sys
 from time import sleep as s
 
+#
 
 def run():
     with open("characters.json") as file:
@@ -172,7 +173,7 @@ def run():
         print(hero, "HP: ", hero_health)
         print(boss, "HP: ", boss_health)
         s(1) 
-        print("\nEnter a command: (A)ttack or (I)tem")
+        print("\nEnter a command (A)ttack or (I)tem")
         while (boss_health > 0) and (hero_health > 0):
             action = input("Choose an action: ").strip().lower()
             while action not in ["attack","a","item","i"]:
@@ -257,4 +258,5 @@ def run():
 
     main()
 
-run()
+if __name__ == "__main__":
+    run()

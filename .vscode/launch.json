@@ -6,12 +6,12 @@
     "configurations": [
         
         {
-            "name": "Python: main.py",
+            "name": "Python: app.py",
             "type": "python",
             "request": "launch",
-            "program": "main.py",
+            "program": "app.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
         }
     ]
 }

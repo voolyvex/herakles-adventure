@@ -3,6 +3,8 @@ FROM python:3.11
 
 ADD main.py .
 
-RUN pip install
+RUN pip install --upgrade pip
 
-CMD ["python", "./main.py"]
+COPY . .
+
+CMD ["streamlit", "./main.py"]
