@@ -1,0 +1,13 @@
+{
+  "id": "001_INTRODUCTION",
+  "title": "Introduction",
+  "type": "lore_chunk",
+  "related_chunks": [
+    "001_INTRODUCTION.md"
+  ],
+  "entities": [],
+  "categories": [],
+  "relationships": [],
+  "summary": "",
+  "notes": ""
+}

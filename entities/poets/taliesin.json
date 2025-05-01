@@ -1,0 +1,13 @@
+{
+  "id": "taliesin",
+  "name": "Taliesin",
+  "culture": "welsh",
+  "era": "early christian",
+  "known_works": ["Book of Taliesin"],
+  "signature_style": "Prophecy mixed with nature imagery",
+  "special_abilities": ["Shape-shifting", "Perfect memory"],
+  "relationships": {
+    "mentor": "ceridwen",
+    "rival": "anierin"
+  }
+}

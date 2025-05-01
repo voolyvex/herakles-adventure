@@ -1,0 +1,13 @@
+{
+  "id": "030_MINERVA",
+  "title": "Minerva",
+  "type": "lore_chunk",
+  "related_chunks": [
+    "030_MINERVA.md"
+  ],
+  "entities": [],
+  "categories": [],
+  "relationships": [],
+  "summary": "",
+  "notes": ""
+}

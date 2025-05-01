@@ -1,0 +1,41 @@
+{
+    "Herakles": 
+        {
+            "Health": 50, 
+            "Defense": 0,
+            "Attack": 
+                [
+                    ["Arrows", 7],
+                    ["Bare Hand", 5],
+                    ["Sword", 9]
+                ],
+            "Item": {"Boar Meat": 4}
+        },
+    "Nemean Lion":
+        {
+            "Health": 20,
+            "Attack": 
+            [
+                ["Claw", 5], 
+                ["Roar", 8]
+            ]
+        },
+    "Lernaean Hydra":
+        {
+            "Health": 30,
+            "Attack": 
+            [
+                ["Blood of Nessus", 11], 
+                ["Choker", 9]
+            ]
+        },
+    "Cerberus": 
+        {
+            "Health": 40, 
+            "Attack": 
+                [
+                    ["Bite", 10], 
+                    ["Strength of Hades", 14]
+                ]
+        }
+}

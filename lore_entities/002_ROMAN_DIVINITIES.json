@@ -1,0 +1,13 @@
+{
+  "id": "002_ROMAN_DIVINITIES",
+  "title": "Roman Divinities",
+  "type": "lore_chunk",
+  "related_chunks": [
+    "002_ROMAN_DIVINITIES.md"
+  ],
+  "entities": [],
+  "categories": [],
+  "relationships": [],
+  "summary": "",
+  "notes": ""
+}

@@ -1,0 +1,18 @@
+{
+  "opponents": [
+    {
+      "id": "druid_bard",
+      "name": "Druid Bard",
+      "culture": "irish",
+      "awen_capacity": 12,
+      "special_abilities": ["Nature Chant"]
+    },
+    {
+      "id": "viking_skald",
+      "name": "Viking Skald",
+      "culture": "norse",
+      "awen_capacity": 15,
+      "special_abilities": ["Blood Verse"]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "060_AMPHITRITE",
+  "title": "Amphitrite",
+  "type": "lore_chunk",
+  "related_chunks": [
+    "060_AMPHITRITE.md"
+  ],
+  "entities": [],
+  "categories": [],
+  "relationships": [],
+  "summary": "",
+  "notes": ""
+}

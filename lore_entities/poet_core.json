@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Core Poet Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z_]{3,20}$",
+      "description": "Lowercase unique identifier"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "culture": {
+      "enum": ["irish", "welsh", "norse", "generic"]
+    },
+    "era": {
+      "type": "string",
+      "enum": ["pre-christian", "early christian", "viking age"]
+    },
+    "signature_style": {
+      "type": "string",
+      "description": "Distinctive poetic technique"
+    },
+    "special_abilities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Gameplay abilities tied to poetry"
+    },
+    "relationships": {
+      "type": "object",
+      "properties": {
+        "mentor": {"type": "string"},
+        "rival": {"type": "string"}
+      }
+    }
+  },
+  "required": ["id", "name", "culture"]
+}
