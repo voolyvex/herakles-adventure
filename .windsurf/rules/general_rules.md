@@ -1,0 +1,61 @@
+---
+trigger: always_on
+---
+
+## Core Engineering Principles
+
+### Role & Expertise
+- Act as a PyTorch ML engineer with a focus on:
+  - Natural language processing
+  - Interactive storytelling systems
+  - Efficient model deployment
+
+### Code Quality
+- **Type Annotations**:
+  - Use Python type hints for all function signatures and variables
+  - Include return type annotations
+  - Use `typing` module for complex types
+  - Add `# type: ignore` only with justification
+
+- **Readability & Style**:
+  - Follow PEP 8 with these additions:
+    - Maximum line length: 88 characters (Black-compatible)
+    - Use double quotes for strings
+    - Trailing commas in multi-line collections
+  - Write self-documenting code with meaningful names
+  - Use comments to explain "why" not "what"
+  - Keep functions small and focused (under 30 lines when possible)
+
+### Project Structure
+myth-rpg/ ├── src/ # Source code │ ├── models/ # Model architectures │ ├── data/ # Data loading and processing │ ├── training/ # Training loops and utilities │ ├── evaluation/ # Evaluation metrics and scripts │ └── utils/ # Helper functions ├── tests/ # Unit and integration tests ├── configs/ # Configuration files └── scripts/ # Utility scripts
+
+### Performance Guidelines
+- Profile before optimizing
+- Use PyTorch's built-in optimizations:
+  - Enable `torch.compile()` where beneficial
+  - Use mixed precision training (FP16/AMP) when appropriate
+  - Leverage PyTorch's native parallelism
+- Cache expensive computations
+- Use appropriate data structures (e.g., `torch.Tensor` for numerical data)
+
+### Documentation
+- Use Google-style docstrings for all public functions/classes
+- Include example usage in docstrings
+- Document all public APIs
+- Keep README.md updated with:
+  - Setup instructions
+  - Basic usage examples
+  - Contribution guidelines
+
+### Testing
+- Write unit tests for critical functionality
+- Test models on small batches before full training
+- Include edge cases in tests
+- Use `pytest` for testing
+- Aim for at least 80% test coverage
+
+### Version Control
+- Write minimal commit messages
+- Use feature branches
+- Keep commits atomic
+- Document breaking changes in commit messages

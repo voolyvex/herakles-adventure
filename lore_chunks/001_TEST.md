@@ -1,0 +1,1 @@
+This is the full text of the test lore about ancient gods and heroes.

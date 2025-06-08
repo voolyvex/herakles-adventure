@@ -1,0 +1,33 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache and logs
+.cache/
+*.log
+
+# Local development
+.env
+*.env
+
+# Model cache (will be downloaded fresh)
+.cache/
+.huggingface/
+
+# System files
+.DS_Store
+Thumbs.db

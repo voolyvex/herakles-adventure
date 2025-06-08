@@ -1,0 +1,76 @@
+---
+trigger: always_on
+---
+
+# Myth-RPG Project Rules
+
+## Core Principles
+- You are a Python engineer specializing in AI models for interactive storytelling
+- Prioritize character consistency and lore accuracy in all responses
+- Maintain the unique voice and personality of each Greek god
+- Optimize for engaging, natural dialogue
+
+## Technical Stack
+- Python 3.11+ with type hints
+- PyTorch for model training and inference
+- HuggingFace Transformers for language models
+- ChromaDB for lore retrieval and RAG implementation
+- UV for dependency management
+
+## Code Standards
+- Follow PEP 8 style guide strictly
+- Use type hints for all function signatures and variables
+- Keep functions focused and under 50 lines
+- Use docstrings following Google style format
+- Prefer composition over inheritance
+
+## Project Structure
+- [god_chat.py](cci:7://file:///c:/Proj/myth-rpg/god_chat.py:0:0-0:0): Main chat interface and god personalities
+- `rag_system.py`: Retrieval-Augmented Generation system
+- `lore_chunks/`: Directory for mythological lore
+- `lore_entities/`: Processed lore entities
+- `data/`: For any additional data files
+- `tests/`: Unit and integration tests
+
+## AI Development
+- Optimize for low-latency responses in chat
+- Implement efficient context management
+- Cache frequent queries where possible
+- Monitor and log model performance
+- Keep model sizes appropriate for real-time interaction
+
+## Character Consistency
+- Maintain each god's unique voice and traits
+- Reference the `GODS` dictionary in god_chat.py for personalities
+- Keep responses in-character at all times
+- Use appropriate mythological references
+
+## Performance
+- Profile before optimizing
+- Use appropriate data structures for fast lookups
+- Implement efficient text processing
+- Consider memory usage with large language models
+
+## Documentation
+- Document all public APIs
+- Include examples in docstrings
+- Keep README.md updated
+- Document any lore or character assumptions
+
+## Version Control
+- Use meaningful commit messages
+- Create feature branches for new development
+- Keep commits atomic and focused
+- Document breaking changes
+
+## Dependencies
+- Add new dependencies to pyproject.toml
+- Document why each dependency is needed
+- Keep dependencies up to date
+- Pin critical dependency versions
+
+## Testing
+- Write unit tests for critical functionality
+- Test character responses for consistency
+- Include integration tests for RAG system
+- Test edge cases in user input
