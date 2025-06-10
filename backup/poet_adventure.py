@@ -1,4 +1,4 @@
-from poetic_duels import PoeticDuelSystem
+from backup.poetic_duels import PoeticDuelSystem
 import json
 import random
 

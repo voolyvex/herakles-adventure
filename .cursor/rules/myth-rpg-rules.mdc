@@ -1,7 +1,8 @@
 ---
-trigger: always_on
+description: 
+globs: 
+alwaysApply: true
 ---
-
 # Myth-RPG Project Rules
 
 ## Core Principles
@@ -29,8 +30,8 @@ trigger: always_on
 - `rag_system.py`: Retrieval-Augmented Generation system
 - `lore_chunks/`: Directory for mythological lore
 - `lore_entities/`: Processed lore entities
-- `data/`: For any additional data files
-- `tests/`: Unit and integration tests
+- `utils/`: For any additional scripts or utility files (e.g. name_mapping.py)
+- `agents/`: contains the agents for RAG system (`dense_retriever.py`, `reranker.py`, `orchestrator.py`, `summarizer.py`, `entity_agent.py`, and `sparse_retriever.py`)
 
 ## AI Development
 - Optimize for low-latency responses in chat
@@ -73,4 +74,5 @@ trigger: always_on
 - Write unit tests for critical functionality
 - Test character responses for consistency
 - Include integration tests for RAG system
+
 - Test edge cases in user input

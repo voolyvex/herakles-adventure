@@ -2,13 +2,17 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Add this section to allow direct references
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project]
 name = "myth-rpg"
 version = "0.1.0"
 description = "Mythology themed text RPG"
 readme = "README.md"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    { name = "voolyvex", email = "your.email@example.com" },
 ]
 requires-python = ">=3.8"
 license = { text = "MIT" }
@@ -22,17 +26,24 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
-    "torch>=2.0.0",
-    "transformers>=4.36.0",
+    "torch==2.4.1",
+    "torch-directml==0.2.5.dev240914",
+    "torchvision>=0.19.1",
+    "transformers==4.40.2",
     "accelerate>=0.25.0",
     "sentencepiece>=0.1.99",
     "sentence-transformers>=2.2.0",
     "chromadb>=0.4.0",
     "numpy>=1.24.0",
+    "pyyaml>=6.0",
     "einops>=0.7.0",
     "safetensors>=0.4.0",
     "rank_bm25>=0.2.2",
-    "nltk>=3.8.1"
+    "nltk>=3.8.1",
+    # On non-Windows systems with CUDA, install flash-attn for performance.
+    # On Windows (with AMD/DirectML), this will be ignored, and the runtime
+    # patch in god_chat.py handles the model's dependency.
+    "flash-attn>=2.7.0; platform_system != 'Windows'"
 ]
 
 

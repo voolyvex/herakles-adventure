@@ -3,7 +3,8 @@ import json
 import uuid
 import logging
 import warnings
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+import re
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -15,6 +16,17 @@ logger = logging.getLogger(__name__)
 # Set environment variables to suppress progress bars and warnings
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# Import name mapping utilities
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.name_mapping import (
+    translate_name, 
+    normalize_god_name, 
+    get_name_variants,
+    GREEK_TO_ROMAN,
+    ROMAN_TO_GREEK
+)
 
 # Import with progress bars disabled
 import torch
@@ -32,160 +44,277 @@ logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
 from agents.dense_retriever import DenseRetrieverAgent
 from agents.sparse_retriever import SparseRetrieverAgent
 from agents.reranker import RerankerAgent
-from agents.summarizer import SummarizerAgent
 from agents.entity_agent import EntityAgent
+from agents.summarizer import SummarizerAgent
 from agents.orchestrator import HybridOrchestrator
 
 class RAGSystem:
-    def __init__(self, lore_entities_dir="lore_entities", lore_chunks_dir="lore_chunks", 
-                 embedding_model_name='sentence-transformers/all-MiniLM-L6-v2', collection_name="myth_lore"):
+    def __init__(self, lore_entities_dir: str = "lore_entities", 
+                 lore_chunks_dir: str = "lore_chunks",
+                 embedding_model_name: str = 'sentence-transformers/all-MiniLM-L6-v2', 
+                 collection_name: str = "myth_lore"):
+        """
+        Initialize the RAG system with lore directories and model configuration.
+        
+        Args:
+            lore_entities_dir: Directory containing entity metadata files
+            lore_chunks_dir: Directory containing lore text chunks
+            embedding_model_name: Name of the sentence transformer model to use
+            collection_name: Name of the ChromaDB collection to use/create
+        """
         logging.info("Initializing RAG System...")
+        
+        # Initialize instance variables
         self.lore_entities_dir = lore_entities_dir
         self.lore_chunks_dir = lore_chunks_dir
-        self.embedding_model = SentenceTransformer(embedding_model_name)
-        logging.info(f"Embedding model '{embedding_model_name}' loaded.")
+        self.collection_name = collection_name
+        self.embedding_model_name = embedding_model_name
         
-        # Use persistent ChromaDB client with HNSW tuning
-        # This will persist all embeddings in the 'chroma_db' folder
-        self.chroma_client = chromadb.PersistentClient(path="chroma_db")
-        self.collection = self.chroma_client.get_or_create_collection(
-            name=collection_name,
-            metadata={
-                "hnsw:space": "ip",
-                "hnsw:construction_ef": 128,  # construction quality
-                "hnsw:search_ef": 32  # lower for speed, raise for recall
-            }
-        )
-        logging.info(f"ChromaDB collection '{collection_name}' ready (persistent mode).")
+        # Initialize name mapping utilities first
+        self._init_name_mapping()
         
-        self._load_and_index_lore()
+        # Initialize the embedding model
+        try:
+            self.embedding_model = SentenceTransformer(embedding_model_name)
+            logging.info(f"Loaded embedding model: {embedding_model_name}")
+        except Exception as e:
+            logging.error(f"Failed to load embedding model: {e}")
+            raise
+        
+        # Initialize ChromaDB client
+        try:
+            self.chroma_client = chromadb.PersistentClient(path="chroma_db")
+            logging.info("Initialized ChromaDB client")
+        except Exception as e:
+            logging.error(f"Failed to initialize ChromaDB client: {e}")
+            raise
+        
+        # Load lore data and create collection
+        self.lore_chunks = self._load_lore()
+        self.collection = self._create_collection()
+        
+        # Initialize the agentic RAG pipeline
+        self._init_agentic_rag()
+        
+        logging.info("RAG System initialization complete")
+    
+    def _init_name_mapping(self):
+        """Initialize name mapping utilities and caches."""
+        # Cache for name variants to avoid recomputation
+        self._name_variants_cache = {}
+        
+        # Set of all known god names (Greek and Roman)
+        self.all_god_names = set(GREEK_TO_ROMAN.keys()) | set(ROMAN_TO_GREEK.keys()) | \
+                             {v.lower() for v in GREEK_TO_ROMAN.values()} | \
+                             {v.lower() for v in ROMAN_TO_GREEK.values()}
 
-        # === Hybrid Agent Team Setup ===
-        # Load all lore chunks for agent-based retrieval
-        logging.info("Preparing agent-based hybrid RAG...")
-        self.lore_chunks = self._load_lore_data()
-        # Instantiate agents
-        self.dense_agent = DenseRetrieverAgent(embedding_model_name, self.lore_chunks)
-        self.sparse_agent = SparseRetrieverAgent(self.lore_chunks)
-        self.reranker_agent = RerankerAgent('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        self.summarizer_agent = SummarizerAgent('facebook/bart-large-cnn')
-        self.entity_agent = EntityAgent('dbmdz/bert-large-cased-finetuned-conll03-english')
-        self.orchestrator = HybridOrchestrator(
-            dense_agent=self.dense_agent,
-            sparse_agent=self.sparse_agent,
-            reranker_agent=self.reranker_agent,
-            summarizer_agent=self.summarizer_agent,
-            entity_agent=self.entity_agent
-        )
+    def _init_agentic_rag(self):
+        """
+        Initialize the agentic RAG pipeline with all components.
+        
+        This sets up the full retrieval pipeline with enhanced name variant handling.
+        """
+        try:
+            logging.info("Initializing DenseRetrieverAgent...")
+            dense_agent = DenseRetrieverAgent(
+                embedding_model_name=self.embedding_model_name,
+                collection=self.collection
+            )
+            logging.info("DenseRetrieverAgent initialized.")
+            
+            # Initialize sparse agent with error handling
+            sparse_agent = None
+            try:
+                logging.info("Initializing SparseRetrieverAgent...")
+                sparse_agent = SparseRetrieverAgent(
+                    lore_chunks=self.lore_chunks
+                )
+                logging.info("SparseRetrieverAgent initialized.")
+            except Exception as e:
+                logging.warning(f"Failed to initialize SparseRetrieverAgent: {e}. Continuing without it.")
+                print(f"Warning: Failed to initialize SparseRetrieverAgent. Continuing without sparse retrieval.")
+            
+            logging.info("Initializing RerankerAgent...")
+            reranker_agent = RerankerAgent(
+                model_name='cross-encoder/ms-marco-MiniLM-L-6-v2'
+            )
+            logging.info("RerankerAgent initialized.")
+            
+            logging.info("Initializing EntityAgent...")
+            entity_agent = EntityAgent(
+                model_name='dbmdz/bert-large-cased-finetuned-conll03-english'
+            )
+            logging.info("EntityAgent initialized.")
 
-    def _chunk_text(self, text, chunk_size=200, overlap=50):
-        """Split text into overlapping chunks for finer-grained embedding."""
-        words = text.split()
-        chunks = []
-        step = chunk_size - overlap
-        for i in range(0, len(words), step):
-            segment = words[i:i+chunk_size]
-            chunks.append(" ".join(segment))
-        return chunks
+            logging.info("Initializing SummarizerAgent...")
+            summarizer_agent = SummarizerAgent()
+            logging.info("SummarizerAgent initialized.")
+            
+            # Create the orchestrator with all agents
+            logging.info("Creating HybridOrchestrator...")
+            self.agentic_rag = HybridOrchestrator(
+                dense_agent=dense_agent,
+                sparse_agent=sparse_agent,
+                reranker_agent=reranker_agent,
+                entity_agent=entity_agent,
+                summarizer_agent=summarizer_agent
+            )
+            
+            logging.info("Agentic RAG pipeline initialized successfully with name variant support.")
+            print("Agentic RAG pipeline initialized successfully with name variant support.")
+            
+        except Exception as e:
+            error_msg = f"Error initializing agentic RAG pipeline: {e}"
+            logging.error(error_msg)
+            print(error_msg)
+            raise
 
-    def _load_lore_data(self):
-        lore_data = []
-        if not os.path.exists(self.lore_entities_dir):
-            logging.warning(f"Lore entities directory not found: {self.lore_entities_dir}")
-            return lore_data
+    def _load_lore(self) -> List[Dict[str, Any]]:
+        """
+        Load all lore data from the lore chunks directory with metadata handling.
+        
+        Returns:
+            List of lore chunks with metadata and normalized god names
+        """
+        import yaml
+        
+        lore_chunks = []
+        
+        # Ensure the directory exists
         if not os.path.exists(self.lore_chunks_dir):
             logging.warning(f"Lore chunks directory not found: {self.lore_chunks_dir}")
-            return lore_data
-
-        for entity_fname in os.listdir(self.lore_entities_dir):
-            if entity_fname.endswith(".json"):
-                entity_path = os.path.join(self.lore_entities_dir, entity_fname)
-                try:
-                    with open(entity_path, 'r', encoding='utf-8') as f:
-                        entity_meta = json.load(f)
-                    
-                    for chunk_fname_md in entity_meta.get("related_chunks", []):
-                        chunk_path_md = os.path.join(self.lore_chunks_dir, chunk_fname_md)
-                        if os.path.exists(chunk_path_md):
-                            with open(chunk_path_md, 'r', encoding='utf-8') as cf:
-                                chunk_text = cf.read()
-                            
-                            # Prepare metadata, ensuring all values are Chroma-compatible (str, int, float, bool)
-                            # Attempt to infer the god from the entity file name or metadata
-                            god_name = entity_meta.get("title", "").split()[0] if entity_meta.get("title") else entity_fname.split("_")[0]
-                            metadata = {
-                                "title": str(entity_meta.get("title", "N/A")),
-                                "source_entity_id": str(entity_meta.get("id", "N/A")),
-                                "chunk_file": str(chunk_fname_md),
-                                "god": god_name
-                                # Add other relevant metadata from entity_meta if needed, ensuring type compatibility
-                            }
-                            if entity_meta.get("summary"):
-                                metadata["summary"] = str(entity_meta.get("summary"))
-
-                            # Chunk the text into overlapping segments
-                            for idx, segment in enumerate(self._chunk_text(chunk_text)):
-                                meta_copy = metadata.copy()
-                                meta_copy["chunk_part"] = idx
-                                lore_data.append({
-                                    "id": f"{uuid.uuid4()}_{idx}",
-                                    "text": segment,
-                                    "metadata": meta_copy
-                                })
-                        else:
-                            print(f"Warning: Markdown file {chunk_fname_md} not found in {self.lore_chunks_dir}")
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not decode JSON from {entity_path}")
-                except Exception as e:
-                    print(f"Error processing entity file {entity_path}: {e}")
-        logging.info(f"Loaded {len(lore_data)} lore documents for agent processing.")
-        return lore_data
-
-    def _load_and_index_lore(self):
-        logging.info("Loading and indexing lore...")
-        # Check if collection is already populated (simple check, might need refinement for persistence)
-        if self.collection.count() > 0:
-            logging.info("Lore already indexed.")
-            return
-
-        lore_documents = self._load_lore_data()
-        if not lore_documents:
-            logging.info("No lore documents to index.")
-            return
-
-        batch_size = 100 # Process in batches if many documents
-        for i in range(0, len(lore_documents), batch_size):
-            batch = lore_documents[i:i+batch_size]
-            ids_batch = [doc['id'] for doc in batch]
-            texts_batch = [doc['text'] for doc in batch]
-            metadata_batch = [doc['metadata'] for doc in batch]
-            
-            logging.info(f"Generating embeddings for batch {i//batch_size + 1}...")
-            embeddings_batch = self.embedding_model.encode(texts_batch).tolist()
-            
+            return lore_chunks
+        
+        # Get all markdown files in the lore directory
+        for filename in os.listdir(self.lore_chunks_dir):
+            if not filename.endswith('.md'):
+                continue
+                
+            filepath = os.path.join(self.lore_chunks_dir, filename)
             try:
-                self.collection.add(
-                    ids=ids_batch,
-                    embeddings=embeddings_batch,
-                    documents=texts_batch,
-                    metadatas=metadata_batch
-                )
-                logging.info(f"Indexed batch {i//batch_size + 1} ({len(batch)} documents).")
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # Extract metadata (if any) and content
+                metadata = {}
+                if content.startswith('---'):
+                    try:
+                        metadata_part = content.split('---', 2)[1]
+                        content = content.split('---', 2)[2].strip()
+                        
+                        # Parse YAML metadata
+                        metadata = yaml.safe_load(metadata_part) or {}
+                        
+                        # Normalize god names in metadata
+                        if 'god' in metadata:
+                            normalized_god, _ = translate_name(metadata['god'], to_roman=False)
+                            metadata['god'] = normalized_god
+                            metadata['god_variants'] = get_name_variants(normalized_god)
+                            
+                    except Exception as e:
+                        logging.warning(f"Error parsing metadata in {filename}: {e}")
+                
+                # Create a unique ID for the chunk
+                chunk_id = f"{os.path.splitext(filename)[0]}_{len(lore_chunks)}"
+                
+                # Add to chunks
+                lore_chunks.append({
+                    'id': chunk_id,
+                    'text': content,
+                    'metadata': metadata,
+                    'god': metadata.get('god', 'unknown').lower(),
+                    'source_file': filename
+                })
+                
             except Exception as e:
-                logging.error(f"Error indexing batch: {e}")
-                # Optionally, print details of the problematic batch items
-                # for k, item_meta in enumerate(metadata_batch):
-                #     logging.debug(f"Item {k} metadata: {item_meta}")
+                logging.error(f"Error loading lore file {filename}: {e}")
+        
+        logging.info(f"Loaded {len(lore_chunks)} lore chunks")
+        return lore_chunks
 
-        logging.info(f"Finished indexing. Total documents in collection: {self.collection.count()}")
+    def _create_collection(self):
+        """
+        Create or get the ChromaDB collection and index the lore chunks.
+        
+        Returns:
+            The ChromaDB collection object
+        """
+        try:
+            # Create or get the collection with HNSW indexing
+            collection = self.chroma_client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={
+                    "hnsw:space": "cosine",
+                    "hnsw:construction_ef": 200,
+                    "hnsw:search_ef": 50,
+                    "hnsw:M": 16
+                }
+            )
+            
+            # Check if collection is empty and needs indexing
+            if collection.count() == 0 and self.lore_chunks:
+                logging.info("Indexing lore chunks...")
+                
+                # Process in batches to avoid memory issues
+                batch_size = 50
+                for i in range(0, len(self.lore_chunks), batch_size):
+                    batch = self.lore_chunks[i:i + batch_size]
+                    
+                    # Extract batch data
+                    ids = [chunk['id'] for chunk in batch]
+                    texts = [chunk['text'] for chunk in batch]
+                    metadatas = [chunk['metadata'] for chunk in batch]
+                    
+                    # Generate embeddings
+                    embeddings = self.embedding_model.encode(texts).tolist()
+                    
+                    # Add to collection
+                    collection.upsert(
+                        ids=ids,
+                        embeddings=embeddings,
+                        documents=texts,
+                        metadatas=metadatas
+                    )
+                    
+                    logging.info(f"Indexed batch {i//batch_size + 1}/{(len(self.lore_chunks)-1)//batch_size + 1}")
+                
+                logging.info(f"Finished indexing {len(self.lore_chunks)} lore chunks")
+            
+            return collection
+            
+        except Exception as e:
+            logging.error(f"Failed to create/load collection: {e}")
+            raise
+
+    def _get_god_filter(self, god: Optional[str]) -> Optional[Dict]:
+        """Generate a filter for the given god, handling both Greek and Roman names."""
+        if not god:
+            return None
+            
+        # Get all name variants for the god
+        name_variants = get_name_variants(god)
+        
+        # Create a filter that matches any of the name variants
+        return {
+            "$or": [
+                {"god": {"$eq": variant}} for variant in name_variants
+            ]
+        }
 
     def retrieve_lore(self, query_text, k=1, god=None):
         if self.collection.count() == 0:
             logging.debug("Collection is empty.")
             return []
+            
         logging.debug(f"Retrieving legacy lore for query: '{query_text[:50]}...' (god: {god}, k: {k})")
-        query_embedding = self.embedding_model.encode(query_text).tolist()
-        where_filter = {"god": god} if god else None
+        
+        # Preprocess query to handle Greek/Roman name variants
+        query_for_embedding = self._preprocess_query(query_text)
+        query_embedding = self.embedding_model.encode(query_for_embedding).tolist()
+        
+        # Get filter for god name (handling variants)
+        where_filter = self._get_god_filter(god)
+        
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=k,
@@ -203,10 +332,98 @@ class RAGSystem:
         logging.debug(f"Legacy retrieved {len(retrieved_docs)} documents for query: '{query_text[:50]}...' ")
         return retrieved_docs
 
-    def retrieve_lore_with_agents(self, query_text: str, k: int = 3) -> dict:
-        """Hybrid agent-based retrieval: returns summary and ranked docs."""
-        logging.debug(f"[HybridOrchestrator] Retrieving AGENTIC lore for query: '{query_text[:50]}...' (k: {k})")
-        return self.orchestrator.retrieve(query_text, k=k)
+    def _preprocess_query(self, query_text: str) -> str:
+        """Preprocess the query to handle Greek/Roman name variants."""
+        # This is a simple implementation - you might want to enhance it with more sophisticated
+        # text processing or NLP techniques
+        words = query_text.split()
+        processed_words = []
+        
+        for word in words:
+            # Remove punctuation for matching
+            clean_word = re.sub(r'[^\w\s]', '', word).lower()
+            
+            # Check if it's a Greek or Roman god name
+            if clean_word in GREEK_TO_ROMAN:
+                # Add both Greek and Roman names to the query
+                roman_name = GREEK_TO_ROMAN[clean_word]
+                processed_words.extend([word, roman_name])
+            elif clean_word in ROMAN_TO_GREEK:
+                # Add both Roman and Greek names to the query
+                greek_name = ROMAN_TO_GREEK[clean_word]
+                processed_words.extend([word, greek_name])
+            else:
+                processed_words.append(word)
+        
+        return ' '.join(processed_words)
+
+    def retrieve_lore_with_agents(self, query_text: str, k: int = 3, god_context: Optional[str] = None) -> dict:
+        """
+        Retrieve lore using the agentic RAG pipeline with name variant handling.
+        
+        Args:
+            query_text: The user's query text
+            k: Number of results to return
+            god_context: The name of the current god to focus the search on.
+            
+        Returns:
+            Dictionary containing:
+            - summary: A concise summary of the results
+            - documents: List of relevant lore chunks with scores and metadata
+        """
+        if not hasattr(self, 'agentic_rag') or not self.agentic_rag:
+            return {
+                'summary': 'Error: Agentic RAG pipeline not initialized',
+                'documents': []
+            }
+        
+        try:
+            # The orchestrator now handles query expansion. We pass the raw query.
+            # The god_context is passed separately for precise filtering.
+            result = self.agentic_rag.retrieve(query_text, k=k, god_context=god_context)
+            
+            # Post-process the result to normalize god name variants in the output
+            if 'documents' in result and result['documents']:
+                for doc in result['documents']:
+                    if 'text' in doc:
+                        doc['text'] = self._normalize_name_variants(doc['text'])
+            
+            # Filter out documents that start with 'http' or '##'
+            result['documents'] = [doc for doc in result['documents'] if not doc['text'].startswith(('http', '##'))]
+            
+            return result
+            
+        except Exception as e:
+            logging.error(f"Error in retrieve_lore_with_agents: {e}")
+            return {
+                'summary': f'Error retrieving results: {str(e)}',
+                'documents': []
+            }
+    
+    def _normalize_name_variants(self, text: str) -> str:
+        """
+        Normalize name variants in text to Greek names.
+        
+        Args:
+            text: Input text to normalize
+            
+        Returns:
+            Text with name variants normalized to Greek names
+        """
+        if not text:
+            return text
+            
+        # Simple word-based replacement
+        # This is a fallback - the summarizer should handle most cases
+        for roman, greek in ROMAN_TO_GREEK.items():
+            text = re.sub(
+                r'\b' + re.escape(roman) + r'\b', 
+                greek,
+                text,
+                flags=re.IGNORECASE
+            )
+            
+        return text
 
 if __name__ == '__main__':
     # Example usage / test
@@ -243,7 +460,7 @@ if __name__ == '__main__':
         """Test the agentic HybridOrchestrator RAG pipeline for structure and relevance.
 
         Instantiates RAGSystem, queries the orchestrator, and asserts that the output
-        contains a summary and ranked docs mentioning Apollo or Daphne.
+        contains a summary and docs mentioning Apollo or Daphne.
         """
         print("\n[TEST] Agentic HybridOrchestrator RAG")
         rag = RAGSystem()
@@ -251,21 +468,14 @@ if __name__ == '__main__':
         result = rag.retrieve_lore_with_agents(query, k=3)
         assert isinstance(result, dict), "Result should be a dict"
         assert "summary" in result and isinstance(result["summary"], str), "Missing or invalid summary"
-        # Accept both 'documents' and 'ranked_docs' as valid keys
-        docs_key = None
-        if "ranked_docs" in result and isinstance(result["ranked_docs"], list):
-            docs_key = "ranked_docs"
-        elif "documents" in result and isinstance(result["documents"], list):
-            docs_key = "documents"
-        else:
-            print("Result keys:", list(result.keys()))
-            raise AssertionError("Missing or invalid 'documents' or 'ranked_docs' in result")
-        assert len(result[docs_key]) > 0, "No ranked docs returned"
+        # The key should always be 'documents' based on orchestrator.py
+        assert "documents" in result and isinstance(result["documents"], list), "Missing or invalid 'documents' in result"
+        assert len(result["documents"]) > 0, "No documents returned"
         print("Summary:", result["summary"])
-        print("Top doc snippet:", result[docs_key][0]["text"][:120])
+        print("Top doc snippet:", result["documents"][0]["text"][:120])
         # Check that the summary or top doc mentions Apollo or Daphne
         assert "Apollo" in result["summary"] or "Daphne" in result["summary"] or \
-               "Apollo" in result[docs_key][0]["text"] or "Daphne" in result[docs_key][0]["text"], \
+               "Apollo" in result["documents"][0]["text"] or "Daphne" in result["documents"][0]["text"], \
                "Neither Apollo nor Daphne found in summary or top doc"
         print("[PASS] Agentic RAG returns relevant results.")
 

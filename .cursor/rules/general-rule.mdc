@@ -1,7 +1,8 @@
 ---
-trigger: always_on
+description: 
+globs: 
+alwaysApply: true
 ---
-
 ## Core Engineering Principles
 
 ### Role & Expertise
@@ -58,4 +59,5 @@ myth-rpg/ ├── src/ # Source code │ ├── models/ # Model architectur
 - Write minimal commit messages
 - Use feature branches
 - Keep commits atomic
+
 - Document breaking changes in commit messages

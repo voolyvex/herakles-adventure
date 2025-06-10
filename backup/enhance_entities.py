@@ -41,7 +41,7 @@ def extract_entities_from_chunk(md_path: Path) -> Dict[str, List[str]]:
     Returns a dictionary with keys 'characters', 'places', 'items' and corresponding lists.
     """
     # Import entity lists from extract_lore_entities.py to maintain consistency
-    from extract_lore_entities import (
+    from backup.extract_lore_entities import (
         KNOWN_CHARACTERS, KNOWN_PLACES, KNOWN_ITEMS, 
         CHARACTER_PAT, PLACE_PAT, ITEM_PAT, clean_text
     )
