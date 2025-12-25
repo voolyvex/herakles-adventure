@@ -29,10 +29,12 @@ dependencies = [
     "torch==2.4.1",
     "torch-directml==0.2.5.dev240914",
     "torchvision>=0.19.1",
-    "transformers==4.40.2",
+    # Use a newer Transformers compatible with BGE reranker and chat templates
+    "transformers>=4.52.0,<4.53",
     "accelerate>=0.25.0",
     "sentencepiece>=0.1.99",
-    "sentence-transformers>=2.2.0",
+    # Ensure recent sentence-transformers for BGE models
+    "sentence-transformers>=2.5.0",
     "chromadb>=0.4.0",
     "numpy>=1.24.0",
     "pyyaml>=6.0",
@@ -40,10 +42,13 @@ dependencies = [
     "safetensors>=0.4.0",
     "rank_bm25>=0.2.2",
     "nltk>=3.8.1",
+    "requests>=2.31.0",
     # On non-Windows systems with CUDA, install flash-attn for performance.
     # On Windows (with AMD/DirectML), this will be ignored, and the runtime
     # patch in god_chat.py handles the model's dependency.
-    "flash-attn>=2.7.0; platform_system != 'Windows'"
+    "flash-attn>=2.7.0; platform_system != 'Windows'",
+    # Optional: kernels recommended by gpt-oss model card (no-op if unused)
+    "kernels>=0.13.0"
 ]
 
 

@@ -12,6 +12,7 @@ import logging
 import sys
 import re
 import yaml
+import requests
 import textwrap
 import concurrent.futures
 from rag_system import RAGSystem  # Import the RAG system
@@ -87,7 +88,13 @@ def fixed_get_imports(filename: str | os.PathLike) -> list[str]:
 # ---------------------------------------------
 
 class GodChat:
-    def __init__(self, model_name: str = "Qwen/Qwen1.5-1.8B-Chat") -> None:
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen1.5-1.8B-Chat",
+        use_ollama: bool = False,
+        ollama_base_url: str = "http://127.0.0.1:11434",
+        ollama_model: str = "qwen2.5:3b",  # Faster than 7B with good quality
+    ) -> None:
         """Initialize the chat with the specified model and RAG system."""
         self.god_profiles = GOD_PROFILES
         if not self.god_profiles:
@@ -100,20 +107,31 @@ class GodChat:
         self.current_god: str | None = None
         self.max_response_length: int = 150  # Limit response length for better quality
         self.rag_system = None
+        self.use_ollama: bool = use_ollama
+        self.ollama_base_url: str = ollama_base_url.rstrip('/')
+        self.ollama_model: str = ollama_model
         try:
             # Initialize RAG system with lore data
             script_dir = os.path.dirname(os.path.abspath(__file__))
             lore_entities_path = os.path.join(script_dir, "lore_entities")
             lore_chunks_path = os.path.join(script_dir, "lore_chunks")
             console_print("Initializing RAG system...")
-            self.rag_system = RAGSystem(lore_entities_dir=lore_entities_path, lore_chunks_dir=lore_chunks_path)
+            force_reindex = os.getenv("RAG_FORCE_REINDEX", "0") == "1"
+            self.rag_system = RAGSystem(
+                lore_entities_dir=lore_entities_path,
+                lore_chunks_dir=lore_chunks_path,
+                force_reindex=force_reindex,
+            )
             if not self.rag_system.collection or self.rag_system.collection.count() == 0:
                 console_print("RAG system initialized, but no lore was loaded. Ensure 'lore_entities' and 'lore_chunks' directories are populated.")
             else:
                 console_print(f"RAG system initialized with {self.rag_system.collection.count()} lore items.")
-            # Preload the model
-            with patch("transformers.dynamic_module_utils.get_imports", fixed_get_imports):
-                self._load_model()
+            # Preload the model if not using Ollama
+            if not self.use_ollama:
+                with patch("transformers.dynamic_module_utils.get_imports", fixed_get_imports):
+                    self._load_model()
+            else:
+                console_print(f"Using Ollama backend: {self.ollama_model} at {self.ollama_base_url}")
         except Exception as e:
             console_print(f"Error during initialization: {str(e)}")
             # Re-raise the exception to ensure the application exits if initialization fails
@@ -232,8 +250,8 @@ class GodChat:
         if not lore_context or not lore_context.strip():
             return "You have no specific insights on this matter. Rely on your inherent knowledge."
 
-        # Directly use the summary from the RAG system
-        insights = lore_context.strip()
+        # Use sanitized summary from the RAG system
+        insights = self._sanitize_lore_text(lore_context.strip())
             
         return "Use these Divine Insights to inform your response. Do not quote them directly; they are for your internal knowledge only:\n" + insights
 
@@ -328,8 +346,14 @@ class GodChat:
         # Remove quotes if they are at the start and end.
         if response.startswith('"') and response.endswith('"'):
             response = response[1:-1]
-            
-        return response.strip()
+
+        # Enforce a maximum of 4 sentences for concise, in-character replies.
+        sentences = re.split(r'(?<=[.!?])\s+', response)
+        if len(sentences) > 4:
+            response = " ".join(sentences[:4]).strip()
+        else:
+            response = response.strip()
+        return response
 
     def generate_response(self, user_input: str) -> str:
         """Generate a response from the current god, enforcing strict persona and lore accuracy."""
@@ -371,8 +395,8 @@ class GodChat:
                 if secret_options:
                     secret = f"\nYou feel a moment of connection and might reveal a secret: {random.choice(secret_options)}"
 
-            # Combine parts into the final system prompt.
-            final_system_prompt = f"{system_prompt_card}\n\n{insights_prompt}{secret}"
+            # Combine parts into the final system prompt with lightweight reasoning hint.
+            final_system_prompt = f"Reasoning: low\n{system_prompt_card}\n\n{insights_prompt}{secret}"
             
             # Assemble the message history for the model.
             messages = [{"role": "system", "content": final_system_prompt}]
@@ -381,33 +405,33 @@ class GodChat:
                 messages.append({"role": role, "content": text})
             messages.append({"role": "user", "content": user_input})
             
-            # Apply the chat template. This formats the prompt correctly for the model.
-            prompt = self.tokenizer.apply_chat_template(
-                messages, 
-                tokenize=False, 
-                add_generation_prompt=True
-            )
-
             console_print(f"Generating response for {god}...")
 
-            # 3. Model Inference
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1500).to(self.model.device)
-            
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=200,
-                    num_return_sequences=1,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    do_sample=True,
-                    temperature=0.75,
-                    top_p=0.9,
-                    repetition_penalty=1.15
+            if self.use_ollama:
+                response_text = self._generate_via_ollama(messages)
+            else:
+                # Apply the chat template. This formats the prompt correctly for the model.
+                prompt = self.tokenizer.apply_chat_template(
+                    messages, 
+                    tokenize=False, 
+                    add_generation_prompt=True
                 )
-            
-            # Decode only the newly generated tokens.
-            response_text = self.tokenizer.decode(outputs[0][len(inputs['input_ids'][0]):], skip_special_tokens=True)
+                # 3. Model Inference
+                inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1500).to(self.model.device)
+                with torch.no_grad():
+                    outputs = self.model.generate(
+                        **inputs,
+                        max_new_tokens=200,
+                        num_return_sequences=1,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                        do_sample=True,
+                        temperature=0.75,
+                        top_p=0.9,
+                        repetition_penalty=1.15
+                    )
+                # Decode only the newly generated tokens.
+                response_text = self.tokenizer.decode(outputs[0][len(inputs['input_ids'][0]):], skip_special_tokens=True)
             
             # 4. Clean and Validate Response
             response_text = self._clean_response(response_text, god)
@@ -427,6 +451,31 @@ class GodChat:
             console_print(f"Error during response generation: {e}")
             return f"The gods are silent. An error occurred: {str(e)}"
 
+    def _generate_via_ollama(self, messages: list[dict]) -> str:
+        try:
+            payload = {
+                "model": self.ollama_model,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": 0.75,
+                    "top_p": 0.9,
+                    "num_predict": 200,
+                    "repeat_penalty": 1.15,
+                },
+            }
+            resp = requests.post(f"{self.ollama_base_url}/api/chat", json=payload, timeout=120)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict):
+                if "message" in data and isinstance(data["message"], dict):
+                    return data["message"].get("content", "").strip()
+                return data.get("response", "").strip()
+            return ""
+        except Exception as e:
+            console_print(f"Ollama request failed: {e}")
+            return ""
+
 def main():
     """Main function to run the GodChat application."""
     console_print("\n==================================================")
@@ -438,7 +487,8 @@ def main():
     chat = None
     try:
         console_print("Starting initialization...")
-        chat = GodChat()
+        use_ollama = os.getenv("USE_OLLAMA", "0") == "1"
+        chat = GodChat(use_ollama=use_ollama)
         console_print("GodChat instance created")
         
         # Initial God Selection

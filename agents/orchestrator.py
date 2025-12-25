@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Callable, Union
 import os
 import sys
 import nltk
@@ -6,6 +6,7 @@ from nltk.tokenize import word_tokenize
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+import logging
 
 # Add project root to path for utils import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,25 +28,73 @@ def deduplicate(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             seen.add(key)
     return deduped
 
+
+# Type aliases for lazy-loaded agents
+RerankerFactory = Callable[[], RerankerAgent]
+EntityAgentFactory = Callable[[], EntityAgent]
+
+
 class HybridOrchestrator:
-    """Coordinates a team of retrieval agents for robust hybrid RAG."""
+    """Coordinates a team of retrieval agents for robust hybrid RAG.
+    
+    Supports lazy loading of heavy agents (reranker, entity_agent) to speed up startup.
+    Pass a callable factory function instead of an instantiated agent to enable lazy loading.
+    """
+    
     def __init__(
         self,
         dense_agent: DenseRetrieverAgent,
-        sparse_agent: SparseRetrieverAgent,
-        reranker_agent: Optional[RerankerAgent] = None,
-        entity_agent: Optional[EntityAgent] = None,
+        sparse_agent: Optional[SparseRetrieverAgent],
+        reranker_agent: Optional[Union[RerankerAgent, RerankerFactory]] = None,
+        entity_agent: Optional[Union[EntityAgent, EntityAgentFactory]] = None,
         summarizer_agent: Optional[SummarizerAgent] = None
     ):
         self.dense = dense_agent
         self.sparse = sparse_agent
-        self.reranker = reranker_agent
-        self.entity_agent = entity_agent
         self.summarizer = summarizer_agent
+        
+        # Store factories or instances for lazy-loaded agents
+        self._reranker_factory: Optional[RerankerFactory] = None
+        self._reranker_instance: Optional[RerankerAgent] = None
+        self._entity_agent_factory: Optional[EntityAgentFactory] = None
+        self._entity_agent_instance: Optional[EntityAgent] = None
+        
+        # Handle reranker: either an instance or a factory
+        if reranker_agent is not None:
+            if callable(reranker_agent) and not isinstance(reranker_agent, RerankerAgent):
+                self._reranker_factory = reranker_agent
+            else:
+                self._reranker_instance = reranker_agent
+        
+        # Handle entity_agent: either an instance or a factory
+        if entity_agent is not None:
+            if callable(entity_agent) and not isinstance(entity_agent, EntityAgent):
+                self._entity_agent_factory = entity_agent
+            else:
+                self._entity_agent_instance = entity_agent
+        
         try:
             nltk.data.find('tokenizers/punkt')
         except LookupError:
             nltk.download('punkt', quiet=True)
+
+    @property
+    def reranker(self) -> Optional[RerankerAgent]:
+        """Lazy-load the reranker agent on first access."""
+        if self._reranker_instance is None and self._reranker_factory is not None:
+            logging.info("Lazy-loading RerankerAgent...")
+            self._reranker_instance = self._reranker_factory()
+            logging.info("RerankerAgent loaded.")
+        return self._reranker_instance
+
+    @property
+    def entity_agent(self) -> Optional[EntityAgent]:
+        """Lazy-load the entity agent on first access."""
+        if self._entity_agent_instance is None and self._entity_agent_factory is not None:
+            logging.info("Lazy-loading EntityAgent...")
+            self._entity_agent_instance = self._entity_agent_factory()
+            logging.info("EntityAgent loaded.")
+        return self._entity_agent_instance
 
     def _expand_query_with_name_variants(self, query: str) -> str:
         """Expand query with Greek and Roman name variants."""
@@ -122,9 +171,12 @@ class HybridOrchestrator:
         expanded_terms = word_tokenize(expanded_query.lower())
 
         # 3. Parallel retrieval with the god filter
+        # Increase candidate pool sizes to leverage ample RAM
+        dense_k = 40
+        sparse_k = 40
         with ThreadPoolExecutor(max_workers=2) as executor:
-            dense_future = executor.submit(self.dense.retrieve, expanded_query, 15, god_filter)
-            sparse_future = executor.submit(self.sparse.retrieve, expanded_terms, 15, god_filter) if self.sparse else None
+            dense_future = executor.submit(self.dense.retrieve, expanded_query, dense_k, god_filter)
+            sparse_future = executor.submit(self.sparse.retrieve, expanded_terms, sparse_k, god_filter) if self.sparse else None
             dense_hits = dense_future.result()
             sparse_hits = sparse_future.result() if sparse_future else []
         retrieval_time = time.time() - start_time
@@ -142,7 +194,8 @@ class HybridOrchestrator:
         # 4. Rerank with original query for better precision
         rerank_start = time.time()
         # Rerank a smaller pool of candidates to improve performance
-        candidates_to_rerank = sorted(candidates, key=lambda x: x.get('score', 0), reverse=True)[:10]
+        # Rerank a larger pool when RAM is plentiful
+        candidates_to_rerank = sorted(candidates, key=lambda x: x.get('score', 0), reverse=True)[:30]
         try:
             if self.reranker:
                 reranked = self.reranker.rerank(query, candidates_to_rerank, top_k=k)

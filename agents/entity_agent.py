@@ -1,93 +1,136 @@
-from typing import List, Dict, Set, Tuple, Any
+"""Entity extraction agent using SpaCy for lightweight NER.
+
+SpaCy's en_core_web_sm model is ~12MB (vs 340MB for BERT) and much faster.
+Includes custom entity rules for Greek/Roman gods.
+"""
+from typing import List, Dict, Any, Set
 import os
 import sys
-import re
-import warnings
+import logging
 
 # Add project root to path for utils import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.name_mapping import get_name_variants, translate_name, GREEK_TO_ROMAN, ROMAN_TO_GREEK
+from utils.name_mapping import get_name_variants, GREEK_TO_ROMAN, ROMAN_TO_GREEK
 
-# Suppress warnings
-warnings.filterwarnings('ignore')
+import spacy
+from spacy.language import Language
 
-# Import with progress bars disabled
-import torch
-torch.set_num_threads(1)  # Limit CPU threads
-
-# Import transformers with progress bars disabled
-from transformers import logging as transformers_logging
-transformers_logging.set_verbosity_error()
-
-from transformers import pipeline
 
 class EntityAgent:
-    """Agent for extracting named entities from user queries with support for Greek/Roman variants."""
-    def __init__(self, model_name: str = 'dbmdz/bert-large-cased-finetuned-conll03-english'):
+    """Agent for extracting named entities using SpaCy with custom god name rules."""
+    
+    # All known god names (for custom entity ruler)
+    GOD_NAMES: Set[str] = (
+        set(GREEK_TO_ROMAN.keys()) | 
+        set(ROMAN_TO_GREEK.keys()) |
+        {v for v in GREEK_TO_ROMAN.values()} |
+        {v for v in ROMAN_TO_GREEK.values()}
+    )
+    
+    def __init__(self, model_name: str = "en_core_web_sm"):
+        """Initialize SpaCy NER with custom god name patterns.
+        
+        Args:
+            model_name: SpaCy model to load. Default is en_core_web_sm (~12MB).
+                        The model_name parameter is kept for backward compatibility
+                        but the BERT model name will be ignored.
+        """
         try:
-            self.ner = pipeline('ner', model=model_name, aggregation_strategy='simple')
-        except Exception as e:
-            print(f"Warning: Could not load NER model: {e}")
-            self.ner = None
+            # Map old BERT model names to SpaCy
+            if "bert" in model_name.lower() or "dbmdz" in model_name.lower():
+                logging.info(f"Ignoring BERT model '{model_name}', using SpaCy instead")
+                model_name = "en_core_web_sm"
             
+            self.nlp = spacy.load(model_name)
+            self._add_god_entity_ruler()
+            logging.info(f"EntityAgent initialized with SpaCy model: {model_name}")
+        except Exception as e:
+            logging.error(f"Failed to load SpaCy model: {e}")
+            self.nlp = None
+    
+    def _add_god_entity_ruler(self) -> None:
+        """Add custom entity patterns for Greek/Roman gods."""
+        if self.nlp is None:
+            return
+            
+        # Check if entity_ruler already exists
+        if "entity_ruler" in self.nlp.pipe_names:
+            return
+            
+        # Create patterns for all god names
+        patterns = [
+            {"label": "GOD", "pattern": name.capitalize()}
+            for name in self.GOD_NAMES
+        ]
+        
+        # Add the entity ruler before NER to prioritize god names
+        ruler = self.nlp.add_pipe("entity_ruler", before="ner")
+        ruler.add_patterns(patterns)
+    
     def _is_god_name(self, name: str) -> bool:
         """Check if a name is a known Greek or Roman god name."""
-        name_lower = name.lower()
-        return (name_lower in GREEK_TO_ROMAN or 
-                name_lower in ROMAN_TO_GREEK or
-                name_lower in {v.lower() for v in GREEK_TO_ROMAN.values()} or
-                name_lower in {v.lower() for v in ROMAN_TO_GREEK.values()})
-    
-    def _get_name_variants(self, name: str) -> List[str]:
-        """Get all Greek and Roman variants of a name."""
-        return get_name_variants(name)
+        return name.lower() in {n.lower() for n in self.GOD_NAMES}
     
     def extract_entities(self, query: str) -> List[Dict[str, Any]]:
-        """Extract entities from query, with special handling for god names."""
-        if not self.ner:
-            return []
+        """Extract entities from query with special handling for god names.
+        
+        Args:
+            query: Text to extract entities from.
             
-        # Get standard NER results
-        entities = self.ner(query)
+        Returns:
+            List of entity dictionaries with text, type, score, and position info.
+        """
+        if not self.nlp:
+            return []
         
-        # Process entities to handle god names
+        doc = self.nlp(query)
+        
         processed_entities = []
-        seen_entities = set()
+        seen_entities: Set[str] = set()
         
-        for entity in entities:
-            entity_text = entity['word'].strip()
+        for ent in doc.ents:
+            entity_text = ent.text.strip()
             entity_lower = entity_text.lower()
             
-            # Skip if we've already processed this entity
+            # Skip duplicates
             if entity_lower in seen_entities:
                 continue
+            
+            # Determine entity type
+            if ent.label_ == "GOD" or self._is_god_name(entity_text):
+                entity_type = "GOD"
                 
-            # Check if this is a god name
-            if self._is_god_name(entity_text):
-                # Add the original entity
+                # Add the main entity
                 processed_entities.append({
-                    'text': entity_text,
-                    'type': 'GOD',
-                    'score': entity['score'],
-                    'start': entity['start'],
-                    'end': entity['end']
+                    "text": entity_text,
+                    "type": entity_type,
+                    "score": 1.0,  # SpaCy doesn't provide scores, use 1.0
+                    "start": ent.start_char,
+                    "end": ent.end_char,
                 })
-                
-                # Add variants
-                variants = self._get_name_variants(entity_text)
-                for variant in variants:
-                    if variant.lower() != entity_lower and variant.lower() not in seen_entities:
-                        processed_entities.append({
-                            'text': variant,
-                            'type': 'GOD_VARIANT',
-                            'score': entity['score'] * 0.9,  # Slightly lower score for variants
-                            'source_entity': entity_text
-                        })
-                        seen_entities.add(variant.lower())
-                
                 seen_entities.add(entity_lower)
+                
+                # Add name variants
+                variants = get_name_variants(entity_text)
+                for variant in variants:
+                    variant_lower = variant.lower()
+                    if variant_lower != entity_lower and variant_lower not in seen_entities:
+                        processed_entities.append({
+                            "text": variant,
+                            "type": "GOD_VARIANT",
+                            "score": 0.9,
+                            "source_entity": entity_text,
+                        })
+                        seen_entities.add(variant_lower)
             else:
-                # Add non-god entities as-is
-                processed_entities.append(entity)
+                # Non-god entities
+                processed_entities.append({
+                    "text": entity_text,
+                    "type": ent.label_,
+                    "score": 1.0,
+                    "start": ent.start_char,
+                    "end": ent.end_char,
+                })
+                seen_entities.add(entity_lower)
         
         return processed_entities

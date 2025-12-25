@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union
 import numpy as np
 import warnings
 import re
@@ -24,9 +24,33 @@ import chromadb
 
 class DenseRetrieverAgent:
     """Agent for dense embedding-based retrieval using a ChromaDB collection."""
-    def __init__(self, embedding_model_name: str, collection: chromadb.Collection):
-        self.embedding_model = SentenceTransformer(embedding_model_name)
+    
+    # Models that require task prefixes
+    PREFIXED_MODELS = {"nomic-ai/nomic-embed-text-v1.5", "nomic-embed-text-v1.5"}
+    
+    def __init__(
+        self,
+        collection: chromadb.Collection,
+        embedding_model: Optional[SentenceTransformer] = None,
+        embedding_model_name: Optional[str] = None,
+        use_task_prefix: bool = False,
+    ):
+        """Initialize the dense retriever agent.
+        
+        Args:
+            collection: ChromaDB collection to query.
+            embedding_model: Pre-loaded SentenceTransformer model (preferred).
+            embedding_model_name: Model name to load if embedding_model not provided.
+            use_task_prefix: Whether to add task prefixes (e.g., for nomic models).
+        """
+        if embedding_model is not None:
+            self.embedding_model = embedding_model
+        elif embedding_model_name is not None:
+            self.embedding_model = SentenceTransformer(embedding_model_name, trust_remote_code=True)
+        else:
+            raise ValueError("Must provide either embedding_model or embedding_model_name")
         self.collection = collection
+        self._use_task_prefix = use_task_prefix
 
     def retrieve(self, query: str, k: int = 5, where_filter: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """
@@ -35,16 +59,23 @@ class DenseRetrieverAgent:
         if self.collection.count() == 0:
             return []
 
-        # Get embedding for the query
-        query_emb = self.embedding_model.encode([query]).tolist()
+        # Add task prefix if required (e.g., for nomic models)
+        query_text = "search_query: " + query if self._use_task_prefix else query
+        
+        # Get embedding for the query (normalize for cosine similarity)
+        query_emb = self.embedding_model.encode([query_text], normalize_embeddings=True).tolist()
 
         # Query the collection with the provided filter
-        results = self.collection.query(
-            query_embeddings=query_emb,
-            n_results=k,
-            where=where_filter if where_filter else {},
-            include=["documents", "metadatas", "distances"]
-        )
+        # Note: ChromaDB doesn't accept empty dict, use None instead
+        query_kwargs = {
+            "query_embeddings": query_emb,
+            "n_results": k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where_filter:
+            query_kwargs["where"] = where_filter
+        
+        results = self.collection.query(**query_kwargs)
         
         # Format results to be consistent with other agents
         retrieved_docs = []

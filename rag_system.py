@@ -4,6 +4,7 @@ import uuid
 import logging
 import warnings
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 import re
 
 # Suppress warnings
@@ -30,7 +31,16 @@ from utils.name_mapping import (
 
 # Import with progress bars disabled
 import torch
-torch.set_num_threads(1)  # Limit CPU threads to prevent excessive resource usage
+# Allow configuring CPU threads for PyTorch via environment variable to speed up indexing
+try:
+    _threads_env = int(os.getenv("MYTH_THREADS", "0"))
+    if _threads_env > 0:
+        torch.set_num_threads(_threads_env)
+    else:
+        # Sensible default: use up to 8 threads if not specified
+        torch.set_num_threads(8)
+except Exception:
+    torch.set_num_threads(8)
 
 # Import sentence-transformers with progress bars disabled
 import chromadb
@@ -49,10 +59,19 @@ from agents.summarizer import SummarizerAgent
 from agents.orchestrator import HybridOrchestrator
 
 class RAGSystem:
-    def __init__(self, lore_entities_dir: str = "lore_entities", 
-                 lore_chunks_dir: str = "lore_chunks",
-                 embedding_model_name: str = 'sentence-transformers/all-MiniLM-L6-v2', 
-                 collection_name: str = "myth_lore"):
+    # Embedding models that require task prefixes
+    PREFIXED_MODELS = {"nomic-ai/nomic-embed-text-v1.5", "nomic-embed-text-v1.5"}
+    
+    def __init__(
+        self,
+        lore_entities_dir: str = "lore_entities",
+        lore_chunks_dir: str = "lore_chunks",
+        embedding_model_name: str = "BAAI/bge-small-en-v1.5",  # nomic-ai/nomic-embed-text-v1.5 is better but slower to index
+        collection_name: str = "myth_lore",
+        chunk_size_chars: int = 1200,
+        chunk_overlap_chars: int = 200,
+        force_reindex: bool = False,
+    ):
         """
         Initialize the RAG system with lore directories and model configuration.
         
@@ -69,14 +88,34 @@ class RAGSystem:
         self.lore_chunks_dir = lore_chunks_dir
         self.collection_name = collection_name
         self.embedding_model_name = embedding_model_name
+        self.chunk_size_chars = max(300, chunk_size_chars)
+        self.chunk_overlap_chars = max(0, min(chunk_overlap_chars, self.chunk_size_chars // 2))
+        # Increment when chunking/indexing schema changes
+        self._index_version = 2
+        
+        # Check if model requires task prefixes
+        self._uses_task_prefix = any(m in embedding_model_name for m in self.PREFIXED_MODELS)
         
         # Initialize name mapping utilities first
         self._init_name_mapping()
         
         # Initialize the embedding model
         try:
-            self.embedding_model = SentenceTransformer(embedding_model_name)
-            logging.info(f"Loaded embedding model: {embedding_model_name}")
+            _device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # Some models like nomic require trust_remote_code
+            self.embedding_model = SentenceTransformer(
+                embedding_model_name, 
+                device=_device,
+                trust_remote_code=True
+            )
+            logging.info(f"Loaded embedding model: {embedding_model_name} on {_device}")
+            # Embedding batch size (larger on GPU)
+            try:
+                self._embed_batch_size = int(os.getenv("EMBED_BATCH", "0"))
+            except Exception:
+                self._embed_batch_size = 0
+            if self._embed_batch_size <= 0:
+                self._embed_batch_size = 64 if _device == 'cuda' else 32
         except Exception as e:
             logging.error(f"Failed to load embedding model: {e}")
             raise
@@ -89,9 +128,15 @@ class RAGSystem:
             logging.error(f"Failed to initialize ChromaDB client: {e}")
             raise
         
-        # Load lore data and create collection
-        self.lore_chunks = self._load_lore()
-        self.collection = self._create_collection()
+        # Load lore data from cache or regenerate
+        cached_lore = self._load_cached_lore()
+        if cached_lore is not None:
+            self.lore_chunks = cached_lore
+        else:
+            self.lore_chunks = self._load_lore()
+            self._save_lore_cache(self.lore_chunks)
+        
+        self.collection = self._create_collection(force_reindex=force_reindex)
         
         # Initialize the agentic RAG pipeline
         self._init_agentic_rag()
@@ -108,17 +153,105 @@ class RAGSystem:
                              {v.lower() for v in GREEK_TO_ROMAN.values()} | \
                              {v.lower() for v in ROMAN_TO_GREEK.values()}
 
+    def _encode_documents(self, texts: List[str], **kwargs) -> List[List[float]]:
+        """Encode documents for indexing, with task prefix if required.
+        
+        Args:
+            texts: List of document texts to encode.
+            **kwargs: Additional arguments passed to encode().
+            
+        Returns:
+            List of embedding vectors.
+        """
+        if self._uses_task_prefix:
+            texts = ["search_document: " + t for t in texts]
+        return self.embedding_model.encode(texts, **kwargs).tolist()
+
+    def _encode_query(self, query: str, **kwargs) -> List[float]:
+        """Encode a query for retrieval, with task prefix if required.
+        
+        Args:
+            query: Query text to encode.
+            **kwargs: Additional arguments passed to encode().
+            
+        Returns:
+            Embedding vector.
+        """
+        if self._uses_task_prefix:
+            query = "search_query: " + query
+        return self.embedding_model.encode(query, **kwargs).tolist()
+
+    def _get_lore_cache_path(self) -> Path:
+        """Get the path to the lore chunks cache file."""
+        return Path("chroma_db") / "lore_cache.json"
+
+    def _is_cache_fresh(self) -> bool:
+        """Check if the lore cache is fresher than all source lore files.
+        
+        Returns:
+            True if cache exists and is newer than all lore files, False otherwise.
+        """
+        cache_path = self._get_lore_cache_path()
+        if not cache_path.exists():
+            return False
+        
+        cache_mtime = cache_path.stat().st_mtime
+        lore_dir = Path(self.lore_chunks_dir)
+        
+        if not lore_dir.exists():
+            return False
+        
+        # Check if any lore file is newer than the cache
+        for lore_file in lore_dir.glob("*.md"):
+            if lore_file.stat().st_mtime > cache_mtime:
+                logging.info(f"Cache invalidated: {lore_file.name} is newer than cache")
+                return False
+        
+        return True
+
+    def _load_cached_lore(self) -> Optional[List[Dict[str, Any]]]:
+        """Load lore chunks from cache if available and fresh.
+        
+        Returns:
+            Cached lore chunks list, or None if cache is invalid/missing.
+        """
+        if not self._is_cache_fresh():
+            return None
+        
+        cache_path = self._get_lore_cache_path()
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                chunks = json.load(f)
+            logging.info(f"Loaded {len(chunks)} lore chunks from cache")
+            return chunks
+        except Exception as e:
+            logging.warning(f"Failed to load lore cache: {e}")
+            return None
+
+    def _save_lore_cache(self, chunks: List[Dict[str, Any]]) -> None:
+        """Save lore chunks to cache file."""
+        cache_path = self._get_lore_cache_path()
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(chunks, f, ensure_ascii=False)
+            logging.info(f"Saved {len(chunks)} lore chunks to cache")
+        except Exception as e:
+            logging.warning(f"Failed to save lore cache: {e}")
+
     def _init_agentic_rag(self):
         """
         Initialize the agentic RAG pipeline with all components.
         
         This sets up the full retrieval pipeline with enhanced name variant handling.
+        Heavy agents (RerankerAgent, EntityAgent) are lazy-loaded on first query.
         """
         try:
             logging.info("Initializing DenseRetrieverAgent...")
             dense_agent = DenseRetrieverAgent(
-                embedding_model_name=self.embedding_model_name,
-                collection=self.collection
+                collection=self.collection,
+                embedding_model=self.embedding_model,  # Reuse pre-loaded model
+                use_task_prefix=self._uses_task_prefix,  # For nomic models
             )
             logging.info("DenseRetrieverAgent initialized.")
             
@@ -134,34 +267,31 @@ class RAGSystem:
                 logging.warning(f"Failed to initialize SparseRetrieverAgent: {e}. Continuing without it.")
                 print(f"Warning: Failed to initialize SparseRetrieverAgent. Continuing without sparse retrieval.")
             
-            logging.info("Initializing RerankerAgent...")
-            reranker_agent = RerankerAgent(
-                model_name='cross-encoder/ms-marco-MiniLM-L-6-v2'
-            )
-            logging.info("RerankerAgent initialized.")
+            # Create factory functions for lazy-loaded heavy agents
+            # These will only be instantiated on first query, not at startup
+            def create_reranker() -> RerankerAgent:
+                return RerankerAgent(model_name="BAAI/bge-reranker-v2-m3")
             
-            logging.info("Initializing EntityAgent...")
-            entity_agent = EntityAgent(
-                model_name='dbmdz/bert-large-cased-finetuned-conll03-english'
-            )
-            logging.info("EntityAgent initialized.")
+            def create_entity_agent() -> EntityAgent:
+                return EntityAgent(model_name="dbmdz/bert-large-cased-finetuned-conll03-english")
 
             logging.info("Initializing SummarizerAgent...")
             summarizer_agent = SummarizerAgent()
             logging.info("SummarizerAgent initialized.")
             
-            # Create the orchestrator with all agents
-            logging.info("Creating HybridOrchestrator...")
+            # Create the orchestrator with lazy-loaded agents
+            # Pass factory functions instead of instances for heavy models
+            logging.info("Creating HybridOrchestrator (RerankerAgent and EntityAgent will be lazy-loaded)...")
             self.agentic_rag = HybridOrchestrator(
                 dense_agent=dense_agent,
                 sparse_agent=sparse_agent,
-                reranker_agent=reranker_agent,
-                entity_agent=entity_agent,
+                reranker_agent=create_reranker,  # Factory function for lazy loading
+                entity_agent=create_entity_agent,  # Factory function for lazy loading
                 summarizer_agent=summarizer_agent
             )
             
             logging.info("Agentic RAG pipeline initialized successfully with name variant support.")
-            print("Agentic RAG pipeline initialized successfully with name variant support.")
+            print("Agentic RAG pipeline initialized (heavy agents will load on first query).")
             
         except Exception as e:
             error_msg = f"Error initializing agentic RAG pipeline: {e}"
@@ -170,118 +300,239 @@ class RAGSystem:
             raise
 
     def _load_lore(self) -> List[Dict[str, Any]]:
-        """
-        Load all lore data from the lore chunks directory with metadata handling.
-        
-        Returns:
-            List of lore chunks with metadata and normalized god names
-        """
+        """Load and chunk lore markdown files into smaller passages."""
         import yaml
-        
-        lore_chunks = []
-        
-        # Ensure the directory exists
+
+        def _first_nonempty_line(text: str) -> str:
+            for line in text.splitlines():
+                clean = line.strip()
+                if clean:
+                    return clean
+            return ""
+
+        def _chunk_text(text: str, size: int, overlap: int) -> List[Tuple[str, int]]:
+            """Split text into overlapping chunks by paragraph boundaries.
+            
+            Uses a for-loop to guarantee progress and avoid infinite loops.
+            Tracks character offsets without expensive text.find() calls.
+            """
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            chunks: List[Tuple[str, int]] = []
+            if not paragraphs:
+                return chunks
+            
+            # Pre-compute paragraph start offsets to avoid O(n) find() calls
+            para_offsets: List[int] = []
+            search_start = 0
+            for p in paragraphs:
+                idx = text.find(p, search_start)
+                para_offsets.append(idx if idx >= 0 else search_start)
+                search_start = para_offsets[-1] + len(p)
+            
+            current_paras: List[str] = []
+            current_len = 0
+            chunk_start_idx = 0
+            
+            for i, para in enumerate(paragraphs):
+                sep_len = 2 if current_paras else 0  # "\n\n" separator
+                candidate_len = current_len + sep_len + len(para)
+                
+                # Always add if chunk is empty (guarantees progress even for huge paragraphs)
+                if candidate_len <= size or not current_paras:
+                    if not current_paras:
+                        chunk_start_idx = para_offsets[i]
+                    current_paras.append(para)
+                    current_len = candidate_len
+                else:
+                    # Emit current chunk
+                    chunk_text = "\n\n".join(current_paras)
+                    chunks.append((chunk_text, chunk_start_idx))
+                    
+                    # Start new chunk: include overlap from end of previous chunk
+                    if overlap > 0 and chunk_text:
+                        tail = chunk_text[-overlap:]
+                        current_paras = [tail, para]
+                        current_len = len(tail) + 2 + len(para)
+                    else:
+                        current_paras = [para]
+                        current_len = len(para)
+                    chunk_start_idx = para_offsets[i]
+            
+            # Emit final chunk
+            if current_paras:
+                chunk_text = "\n\n".join(current_paras).strip()
+                if chunk_text:
+                    chunks.append((chunk_text, chunk_start_idx))
+            
+            return chunks
+
+        def _detect_gods(text: str) -> Tuple[str, List[str]]:
+            found: List[str] = []
+            lowered = text.lower()
+            all_names = set(GREEK_TO_ROMAN.keys()) | set(ROMAN_TO_GREEK.keys()) | {
+                v.lower() for v in GREEK_TO_ROMAN.values()
+            } | {v.lower() for v in ROMAN_TO_GREEK.values()}
+            for name in all_names:
+                if re.search(rf"\b{name}\b", lowered):
+                    normalized, _ = translate_name(name, to_roman=False)
+                    found.append(normalized.lower())
+            unique = sorted(set(found))
+            primary = unique[0] if len(unique) == 1 else "unknown"
+            return primary, unique
+
+        lore_chunks: List[Dict[str, Any]] = []
+
         if not os.path.exists(self.lore_chunks_dir):
             logging.warning(f"Lore chunks directory not found: {self.lore_chunks_dir}")
             return lore_chunks
-        
-        # Get all markdown files in the lore directory
-        for filename in os.listdir(self.lore_chunks_dir):
+
+        for filename in sorted(os.listdir(self.lore_chunks_dir)):
             if not filename.endswith('.md'):
                 continue
-                
             filepath = os.path.join(self.lore_chunks_dir, filename)
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                # Extract metadata (if any) and content
-                metadata = {}
-                if content.startswith('---'):
+                    raw = f.read()
+
+                metadata: Dict[str, Any] = {}
+                content = raw
+                if raw.startswith('---'):
                     try:
-                        metadata_part = content.split('---', 2)[1]
-                        content = content.split('---', 2)[2].strip()
-                        
-                        # Parse YAML metadata
+                        parts = raw.split('---', 2)
+                        metadata_part = parts[1]
+                        content = parts[2].strip()
                         metadata = yaml.safe_load(metadata_part) or {}
-                        
-                        # Normalize god names in metadata
-                        if 'god' in metadata:
+                        if 'god' in metadata and isinstance(metadata['god'], str):
                             normalized_god, _ = translate_name(metadata['god'], to_roman=False)
                             metadata['god'] = normalized_god
                             metadata['god_variants'] = get_name_variants(normalized_god)
-                            
                     except Exception as e:
                         logging.warning(f"Error parsing metadata in {filename}: {e}")
-                
-                # Create a unique ID for the chunk
-                chunk_id = f"{os.path.splitext(filename)[0]}_{len(lore_chunks)}"
-                
-                # Add to chunks
-                lore_chunks.append({
-                    'id': chunk_id,
-                    'text': content,
-                    'metadata': metadata,
-                    'god': metadata.get('god', 'unknown').lower(),
-                    'source_file': filename
-                })
-                
+
+                title = metadata.get('title') or _first_nonempty_line(content) or os.path.splitext(filename)[0]
+                chunks = _chunk_text(content, self.chunk_size_chars, self.chunk_overlap_chars)
+                # Fallback: if file is short/no chunks, index the whole content
+                if not chunks:
+                    chunks = [(content.strip(), 0)] if content.strip() else []
+                for order, (chunk_text, start_idx) in enumerate(chunks):
+                    primary_god = metadata.get('god') if 'god' in metadata else None
+                    god_variants = metadata.get('god_variants') if 'god_variants' in metadata else None
+                    if not primary_god:
+                        detected_primary, detected_all = _detect_gods(chunk_text)
+                        primary_god = detected_primary
+                        god_variants = detected_all
+                    chunk_id = f"{os.path.splitext(filename)[0]}_c{order}"
+                    lore_chunks.append({
+                        'id': chunk_id,
+                        'text': chunk_text,
+                        'metadata': {
+                            **metadata,
+                            'title': title,
+                            'source_file': filename,
+                            'order': order,
+                            'start_char': int(start_idx),
+                        },
+                        'god': (primary_god or 'unknown').lower(),
+                        'god_variants': god_variants or [],
+                        'source_file': filename,
+                        'title': title,
+                        'order': order,
+                    })
             except Exception as e:
                 logging.error(f"Error loading lore file {filename}: {e}")
-        
-        logging.info(f"Loaded {len(lore_chunks)} lore chunks")
+
+        logging.info(f"Loaded {len(lore_chunks)} chunked lore passages")
         return lore_chunks
 
-    def _create_collection(self):
-        """
-        Create or get the ChromaDB collection and index the lore chunks.
-        
-        Returns:
-            The ChromaDB collection object
-        """
+    def _create_collection(self, force_reindex: bool = False):
+        """Create or rebuild the ChromaDB collection and index lore passages."""
         try:
-            # Create or get the collection with HNSW indexing
-            collection = self.chroma_client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={
-                    "hnsw:space": "cosine",
-                    "hnsw:construction_ef": 200,
-                    "hnsw:search_ef": 50,
-                    "hnsw:M": 16
-                }
-            )
-            
-            # Check if collection is empty and needs indexing
-            if collection.count() == 0 and self.lore_chunks:
-                logging.info("Indexing lore chunks...")
-                
-                # Process in batches to avoid memory issues
-                batch_size = 50
-                for i in range(0, len(self.lore_chunks), batch_size):
-                    batch = self.lore_chunks[i:i + batch_size]
-                    
-                    # Extract batch data
-                    ids = [chunk['id'] for chunk in batch]
-                    texts = [chunk['text'] for chunk in batch]
-                    metadatas = [chunk['metadata'] for chunk in batch]
-                    
-                    # Generate embeddings
-                    embeddings = self.embedding_model.encode(texts).tolist()
-                    
-                    # Add to collection
-                    collection.upsert(
-                        ids=ids,
-                        embeddings=embeddings,
-                        documents=texts,
-                        metadatas=metadatas
-                    )
-                    
-                    logging.info(f"Indexed batch {i//batch_size + 1}/{(len(self.lore_chunks)-1)//batch_size + 1}")
-                
-                logging.info(f"Finished indexing {len(self.lore_chunks)} lore chunks")
-            
+            needs_rebuild = force_reindex
+            try:
+                existing = self.chroma_client.get_collection(name=self.collection_name)
+                meta = existing.metadata or {}
+                stored_version = int(meta.get("index_version", 0))
+                if stored_version < self._index_version:
+                    needs_rebuild = True
+            except Exception:
+                needs_rebuild = True
+
+            if needs_rebuild:
+                try:
+                    self.chroma_client.delete_collection(name=self.collection_name)
+                except Exception:
+                    pass
+                collection = self.chroma_client.get_or_create_collection(
+                    name=self.collection_name,
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "hnsw:construction_ef": 300,
+                        "hnsw:search_ef": 128,
+                        "hnsw:M": 16,
+                        "index_version": self._index_version,
+                    },
+                )
+                if self.lore_chunks:
+                    logging.info("Indexing chunked lore passages...")
+                    batch_size = 50
+                    for i in range(0, len(self.lore_chunks), batch_size):
+                        batch = self.lore_chunks[i : i + batch_size]
+                        ids = [chunk["id"] for chunk in batch]
+                        texts = [chunk["text"] for chunk in batch]
+                        metadatas = [chunk.get("metadata", {}) for chunk in batch]
+                        embeddings = self._encode_documents(
+                            texts,
+                            normalize_embeddings=True,
+                            batch_size=getattr(self, "_embed_batch_size", 32),
+                            convert_to_numpy=True,
+                            show_progress_bar=True,
+                        )
+                        collection.upsert(
+                            ids=ids,
+                            embeddings=embeddings,
+                            documents=texts,
+                            metadatas=metadatas,
+                        )
+                        logging.info(
+                            f"Indexed batch {i // batch_size + 1}/{(len(self.lore_chunks) - 1) // batch_size + 1}"
+                        )
+                    logging.info(f"Finished indexing {len(self.lore_chunks)} passages")
+            else:
+                collection = self.chroma_client.get_or_create_collection(
+                    name=self.collection_name,
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "hnsw:construction_ef": 300,
+                        "hnsw:search_ef": 128,
+                        "hnsw:M": 16,
+                        "index_version": self._index_version,
+                    },
+                )
+                if collection.count() == 0 and self.lore_chunks:
+                    logging.info("Indexing chunked lore passages (collection empty)...")
+                    batch_size = 50
+                    for i in range(0, len(self.lore_chunks), batch_size):
+                        batch = self.lore_chunks[i : i + batch_size]
+                        ids = [chunk["id"] for chunk in batch]
+                        texts = [chunk["text"] for chunk in batch]
+                        metadatas = [chunk.get("metadata", {}) for chunk in batch]
+                        embeddings = self._encode_documents(
+                            texts,
+                            normalize_embeddings=True,
+                            batch_size=getattr(self, "_embed_batch_size", 32),
+                            convert_to_numpy=True,
+                            show_progress_bar=True,
+                        )
+                        collection.upsert(
+                            ids=ids,
+                            embeddings=embeddings,
+                            documents=texts,
+                            metadatas=metadatas,
+                        )
+                        logging.info(
+                            f"Indexed batch {i // batch_size + 1}/{(len(self.lore_chunks) - 1) // batch_size + 1}"
+                        )
             return collection
-            
         except Exception as e:
             logging.error(f"Failed to create/load collection: {e}")
             raise
@@ -310,7 +561,9 @@ class RAGSystem:
         
         # Preprocess query to handle Greek/Roman name variants
         query_for_embedding = self._preprocess_query(query_text)
-        query_embedding = self.embedding_model.encode(query_for_embedding).tolist()
+        query_embedding = self._encode_query(
+            query_for_embedding, normalize_embeddings=True
+        )
         
         # Get filter for god name (handling variants)
         where_filter = self._get_god_filter(god)

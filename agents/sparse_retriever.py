@@ -58,10 +58,12 @@ class SparseRetrieverAgent:
         scores = bm25_index.get_scores(query_terms)
         
         # Get top k results.
-        top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+        # Over-select internally to improve quality when k is large; then trim
+        overselect = min(len(scores), max(k * 3, 50))
+        top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:overselect]
         
         # Return results with scores and debugging info.
-        return [
+        results = [
             {
                 **target_chunks[i], 
                 'score': float(scores[i]),
@@ -69,3 +71,5 @@ class SparseRetrieverAgent:
             } 
             for i in top_idx
         ]
+        # Final trim to requested k
+        return results[:k]

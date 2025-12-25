@@ -1,64 +1,99 @@
-from typing import List, Dict, Any, Tuple, Set
-import os
-import sys
-import re
-import warnings
+"""FlashRank-based reranker agent for fast CPU-optimized reranking.
 
-# Add project root to path for utils import
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.name_mapping import get_name_variants, translate_name, GREEK_TO_ROMAN, ROMAN_TO_GREEK
+FlashRank uses ONNX runtime and is 10x faster than transformer-based cross-encoders.
+Models available:
+- ms-marco-TinyBERT-L-2-v2 (~4MB): Blazing fast, competitive quality
+- ms-marco-MiniLM-L-12-v2 (~34MB): Best quality, still very fast
+- rank-T5-flan (~110MB): Best zero-shot performance
+"""
+from typing import List, Dict, Any
+import logging
 
-# Suppress warnings
-warnings.filterwarnings('ignore')
+from flashrank import Ranker, RerankRequest
 
-# Import with progress bars disabled
-import torch
-torch.set_num_threads(1)  # Limit CPU threads
-
-# Import transformers with progress bars disabled
-from transformers import logging as transformers_logging
-transformers_logging.set_verbosity_error()
-
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 class RerankerAgent:
-    """Agent for reranking retrieved passages using a cross-encoder."""
-    def __init__(self, model_name: str):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-        self.model.eval()
+    """Agent for reranking retrieved passages using FlashRank (ONNX-optimized).
+    
+    FlashRank provides 10x faster reranking compared to transformer-based
+    cross-encoders, with competitive quality on MS MARCO benchmarks.
+    """
+    
+    def __init__(
+        self,
+        model_name: str = "ms-marco-MiniLM-L-12-v2",
+        max_length: int = 256,
+        cache_dir: str = None,
+    ):
+        """Initialize the FlashRank reranker.
+        
+        Args:
+            model_name: FlashRank model to use. Options:
+                - "ms-marco-TinyBERT-L-2-v2" (~4MB, fastest)
+                - "ms-marco-MiniLM-L-12-v2" (~34MB, best quality)
+                - "rank-T5-flan" (~110MB, best zero-shot)
+            max_length: Maximum sequence length for reranking.
+            cache_dir: Directory to cache downloaded models.
+        """
+        logging.info(f"Initializing FlashRank reranker with model: {model_name}")
+        
+        # Map old model names to FlashRank equivalents
+        model_mapping = {
+            "BAAI/bge-reranker-v2-m3": "ms-marco-MiniLM-L-12-v2",
+            "BAAI/bge-reranker-base": "ms-marco-MiniLM-L-12-v2",
+            "BAAI/bge-reranker-large": "ms-marco-MiniLM-L-12-v2",
+        }
+        
+        if model_name in model_mapping:
+            model_name = model_mapping[model_name]
+            logging.info(f"Mapped to FlashRank model: {model_name}")
+        
+        self.model_name = model_name
+        
+        # Build kwargs, only include cache_dir if specified
+        ranker_kwargs = {"model_name": model_name, "max_length": max_length}
+        if cache_dir is not None:
+            ranker_kwargs["cache_dir"] = cache_dir
+        
+        self.ranker = Ranker(**ranker_kwargs)
+        logging.info("FlashRank reranker initialized successfully")
 
-    def rerank(self, query: str, candidates: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
+    def rerank(
+        self, 
+        query: str, 
+        candidates: List[Dict[str, Any]], 
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """Rerank candidate documents against a query.
+        
+        Args:
+            query: The search query.
+            candidates: List of candidate documents with 'text' field.
+            top_k: Number of top results to return.
+            
+        Returns:
+            Top-k candidates sorted by rerank score, with 'rerank_score' added.
         """
-        Reranks a list of candidate documents against an original query.
-        """
-        # Create query-document pairs for reranking using the original query
-        pairs = [(query, c['text']) for c in candidates]
+        if not candidates:
+            return []
         
-        # Tokenize and get scores
-        inputs = self.tokenizer(
-            [p[0] for p in pairs], 
-            [p[1] for p in pairs], 
-            return_tensors='pt', 
-            padding=True, 
-            truncation='only_second',  # Truncate document, not query
-            max_length=512  # Ensure we don't exceed model's max length
-        )
+        # Convert to FlashRank passage format
+        passages = [
+            {"id": str(i), "text": c.get("text", ""), "meta": c.get("metadata", {})}
+            for i, c in enumerate(candidates)
+        ]
         
-        # Get scores from the reranker model
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            scores = outputs.logits.squeeze(-1).cpu().numpy()
+        # Create rerank request and get results
+        request = RerankRequest(query=query, passages=passages)
+        results = self.ranker.rerank(request)
         
-        # Update candidates with rerank scores
-        for i, c in enumerate(candidates):
-            c['rerank_score'] = float(scores[i])
+        # Map results back to original candidates with scores
+        reranked = []
+        for result in results[:top_k]:
+            idx = int(result["id"])
+            candidate = candidates[idx].copy()
+            candidate["rerank_score"] = float(result["score"])
+            candidate["rerank_query_used"] = query
+            reranked.append(candidate)
         
-        # Sort by rerank score and return top k
-        top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-        
-        # Add debug info to top candidates
-        for i in top_idx[:3]:  # Only add to top candidates to avoid too much output
-            candidates[i]['rerank_query_used'] = query
-        
-        return [candidates[i] for i in top_idx]
+        return reranked
