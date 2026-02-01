@@ -138,68 +138,164 @@ class GodChat:
             raise
 
     def _load_model(self):
-        """Load the language model and tokenizer."""
+        """Load the language model and tokenizer with automatic GPU/CPU fallback."""
+        device = None
+        backend = None
+        model_loaded = False
+        
+        # Try GPU backends in order of preference
+        gpu_backends = []
+        
+        # Try DirectML first (for AMD GPUs on Windows)
         try:
+            import torch_directml
+            gpu_backends.append(('DirectML', torch_directml.device()))
+        except ImportError:
+            pass
+        
+        # Try CUDA
+        if torch.cuda.is_available():
+            gpu_backends.append(('CUDA', torch.device('cuda')))
+        
+        # Try each GPU backend, falling back to CPU if memory is insufficient
+        for backend_name, gpu_device in gpu_backends:
             try:
-                import torch_directml
-                device = torch_directml.device()
-                backend = 'DirectML'
-                console_print("Using DirectML for GPU inference.")
-            except ImportError:
-                if torch.cuda.is_available():
-                    device = torch.device('cuda')
-                    backend = 'CUDA'
-                    console_print("Using CUDA for GPU inference.")
+                console_print(f"Attempting to load model on {backend_name}...")
+                device = gpu_device
+                backend = backend_name
+                
+                # Configure model load parameters for GPU
+                model_kwargs = {
+                    "trust_remote_code": True,
+                    "low_cpu_mem_usage": True,
+                    "torch_dtype": torch.float16,
+                    "attn_implementation": "sdpa"
+                }
+                
+                if backend == 'CUDA':
+                    # On CUDA, try flash_attention_2 first, fall back to SDPA if needed
+                    try:
+                        model_kwargs["device_map"] = 'auto'
+                        model_kwargs["attn_implementation"] = "flash_attention_2"
+                    except Exception:
+                        model_kwargs["attn_implementation"] = "sdpa"
+                
+                # Try loading model on GPU
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+                
+                # Try moving to device (this is where memory errors often occur)
+                self.model.to(device)
+                
+                # Test with a small inference to verify it works
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+                test_prompt = "Hello"
+                inputs = self.tokenizer(test_prompt, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    _ = self.model.generate(**inputs, max_new_tokens=5)
+                
+                model_loaded = True
+                console_print(f"Language model loaded successfully on {backend_name}.")
+                break
+                
+            except RuntimeError as e:
+                error_msg = str(e).lower()
+                # Check for memory-related errors (works for both CUDA and DirectML)
+                if any(keyword in error_msg for keyword in ['out of memory', 'not enough', 'memory', 'allocate tensor']):
+                    console_print(f"Insufficient GPU memory on {backend_name}. Falling back to CPU...")
+                    # Clear GPU cache if CUDA
+                    if backend == 'CUDA':
+                        try:
+                            torch.cuda.empty_cache()
+                        except Exception:
+                            pass
+                    # Delete model if it was partially loaded
+                    if hasattr(self, 'model') and self.model is not None:
+                        try:
+                            del self.model
+                        except Exception:
+                            pass
+                        self.model = None
+                    continue
                 else:
-                    device = torch.device('cpu')
-                    backend = 'CPU'
-                    console_print("Using CPU for inference.")
+                    # Other GPU errors - try next backend or fall back to CPU
+                    console_print(f"Error on {backend_name}: {e}. Trying fallback...")
+                    if backend == 'CUDA':
+                        try:
+                            torch.cuda.empty_cache()
+                        except Exception:
+                            pass
+                    if hasattr(self, 'model') and self.model is not None:
+                        try:
+                            del self.model
+                        except Exception:
+                            pass
+                        self.model = None
+                    continue
+            except Exception as e:
+                # Other errors - log and try next backend
+                console_print(f"Error loading on {backend_name}: {e}. Trying fallback...")
+                if backend == 'CUDA':
+                    try:
+                        torch.cuda.empty_cache()
+                    except Exception:
+                        pass
+                if hasattr(self, 'model') and self.model is not None:
+                    try:
+                        del self.model
+                    except Exception:
+                        pass
+                    self.model = None
+                continue
+        
+        # Fall back to CPU if GPU loading failed
+        if not model_loaded:
+            console_print("Falling back to CPU inference (GPU memory insufficient or unavailable).")
+            device = torch.device('cpu')
+            backend = 'CPU'
             
-            # Configure model load parameters based on backend
-            model_kwargs = {
-                "trust_remote_code": True,
-                "low_cpu_mem_usage": True,
-                "torch_dtype": torch.float16 if backend in ('CUDA', 'DirectML') else torch.float32,
-                # Use SDPA for optimal performance on compatible models like Gemma.
-                "attn_implementation": "sdpa"
-            }
-
-            if backend == 'CUDA':
-                # On CUDA, flash_attention_2 is still the best choice.
-                model_kwargs["device_map"] = 'auto'
-                model_kwargs["attn_implementation"] = "flash_attention_2"
-            
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
-            logging.debug(f"Model loaded: {type(self.model)}")
-            
-            # Initialize the tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-            logging.debug(f"Tokenizer loaded: {type(self.tokenizer)}")
-            
-            if self.model is None:
-                raise RuntimeError("Model failed to load and is None.")
-            if self.tokenizer is None:
-                raise RuntimeError("Tokenizer failed to load and is None.")
-            
-            # Move model to chosen device
-            self.model.to(device)
-            console_print(f"Language model ready on {backend}.")
-            
-            # Test the model with a simple prompt to ensure it's working
-            test_prompt = "Hello, I am"
-            inputs = self.tokenizer(test_prompt, return_tensors="pt").to(device)
-            with torch.no_grad():
-                outputs = self.model.generate(**inputs, max_new_tokens=10)
-            # No return value needed, will raise exception on failure
-            
-        except Exception as e:
-            console_print(f"Error loading language model: {str(e)}")
-            console_print("Please ensure you have a stable internet connection and sufficient system resources.")
-            # Re-raise to halt execution if model loading fails
-            raise
+            try:
+                # CPU-optimized settings
+                model_kwargs = {
+                    "trust_remote_code": True,
+                    "low_cpu_mem_usage": True,
+                    "torch_dtype": torch.float32,  # Use float32 on CPU for better compatibility
+                    "attn_implementation": "sdpa"
+                }
+                
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+                self.model.to(device)
+                
+                # Initialize tokenizer
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+                
+                # Test with a small inference
+                test_prompt = "Hello"
+                inputs = self.tokenizer(test_prompt, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    _ = self.model.generate(**inputs, max_new_tokens=5)
+                
+                console_print("Language model loaded successfully on CPU.")
+                model_loaded = True
+                
+            except Exception as e:
+                console_print(f"Error loading language model on CPU: {str(e)}")
+                console_print("Please ensure you have a stable internet connection and sufficient system resources.")
+                raise
+        
+        # Final validation
+        if not model_loaded or self.model is None:
+            raise RuntimeError("Model failed to load on all available backends.")
+        if self.tokenizer is None:
+            raise RuntimeError("Tokenizer failed to load.")
+        
+        logging.debug(f"Model loaded: {type(self.model)} on {backend}")
+        logging.debug(f"Tokenizer loaded: {type(self.tokenizer)}")
 
     def select_god(self):
         """Selects a random god for the conversation."""

@@ -41,6 +41,8 @@ dependencies = [
     "einops>=0.7.0",
     "safetensors>=0.4.0",
     "rank_bm25>=0.2.2",
+    "flashrank>=0.1.0",
+    "spacy>=3.7.0",
     "nltk>=3.8.1",
     "requests>=2.31.0",
     # On non-Windows systems with CUDA, install flash-attn for performance.
@@ -48,7 +50,8 @@ dependencies = [
     # patch in god_chat.py handles the model's dependency.
     "flash-attn>=2.7.0; platform_system != 'Windows'",
     # Optional: kernels recommended by gpt-oss model card (no-op if unused)
-    "kernels>=0.13.0"
+    # Note: Version constraint removed due to availability issues
+    "kernels>=0.11.0"
 ]
 
 
