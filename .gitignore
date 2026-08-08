@@ -44,6 +44,3 @@ chroma_db/
 # Local development
 .DS_Store
 Thumbs.db
-
-# Local issue tracker
-.scratch
