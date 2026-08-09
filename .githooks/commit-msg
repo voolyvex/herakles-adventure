@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Commit-msg normalizer: translate agent trailers to the repo's `Pair:` form
+# and drop the verbose ones.
+#
+# Install with `make hooks` (points core.hooksPath here; shared by worktrees).
+# Bypass a single commit with `git commit --no-verify`.
+#
+# This rewrites rather than rejects. A hook that refused the verbose trailer
+# would fail a commit every time an agent's defaults reintroduced it, which is
+# exactly the friction worth avoiding — the trailers arrive from tool defaults,
+# not from anyone's decision. Rewriting in place normalizes it silently.
+#
+# The transform itself lives in scripts/normalize_trailers.py, which is also
+# what the history backfill and any later repair run use. One definition, so a
+# hook fix and a repair cannot disagree. Read that file for the rules and for
+# why the translation is gated on an agent-email allowlist.
+#
+# Note that `Claude-Session:` and `Generated with …` are also off at their
+# source — see the `attribution` block in .claude/settings.json. The strips
+# here are the backstop for anything that arrives by another path.
+set -euo pipefail
+
+msg_file=$(realpath "$1")
+[[ -f $msg_file ]] || exit 0
+
+root=$(git rev-parse --show-toplevel)
+normalize=$root/scripts/normalize_trailers.py
+
+if [[ ! -f $normalize ]]; then
+	echo "commit-msg: $normalize is missing; cannot normalize trailers." >&2
+	exit 1
+fi
+if ! command -v python3 >/dev/null; then
+	echo "commit-msg: python3 not found; cannot normalize trailers." >&2
+	exit 1
+fi
+
+before=$(<"$msg_file")
+after=$(printf '%s\n' "$before" | python3 "$normalize")
+
+if [[ $after != "$before" ]]; then
+	printf '%s\n' "$after" >"$msg_file"
+	echo "commit-msg: normalized agent trailers in the message."
+fi
