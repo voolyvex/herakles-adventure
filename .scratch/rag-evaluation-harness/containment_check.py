@@ -6,6 +6,23 @@ stopwords stripped. High score = question still echoes the source's wording
 and needs a human paraphrase edit. Near-zero score = candidate for the
 "deliberately uses vocabulary absent from the source" criterion.
 
+The >=0.50 threshold is triage, not an acceptance gate. It finds questions
+worth a human look; the human decides. Do not rewrite a question purely to
+move the number — the metric is crude (whole-file overlap, unstemmed, so
+"arrows" scores and "shafts" does not; unavoidable proper nouns count
+against you; short questions are penalised and long ones dilute), and
+chasing it produces stilted questions that are no harder for BM25. A
+question above 0.50 that a human has judged well-paraphrased is fine if the
+reason is recorded in its notes.
+
+Watch for the same defect arriving by a different route: a question that
+restates its own answer smuggles the source's terms into the query even
+when overall containment is low. That inflates BM25 specifically — sparse
+matches literal terms, dense much less so — which corrupts the
+dense-vs-sparse comparison the harness exists to make. Leaking the answer
+to a *reader* in vocabulary absent from the source is not the same defect
+and is not a problem for a retrieval-only MVP (see synthesis-05).
+
 Deliberately not BM25 rank or the harness's own sparse retriever: iterating
 against the retriever we're trying to evaluate would hand-engineer the sparse
 arm to lose, corrupting the dense-vs-sparse comparison in the opposite

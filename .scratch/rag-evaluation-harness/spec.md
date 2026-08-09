@@ -163,6 +163,33 @@ dense-versus-sparse comparison meaningless. A subset deliberately uses vocabular
 absent from the source passage, so that the comparison has something to discriminate
 on.
 
+A question is accepted into the dataset when a human judges that it does not hand
+the retriever the source's own wording. There are two ways to violate that, and both
+are the same defect:
+
+- **Copying source vocabulary.** Measured by `containment_check.py`, which reports
+  the fraction of a question's content words appearing anywhere in its source file.
+- **Restating the answer in the question.** A question that asserts what it asks for
+  ("which hero wrestled with Death...") smuggles the target passage's terms into the
+  query even when overall containment is low.
+
+Both inflate BM25 specifically, because sparse retrieval matches literal terms while
+dense retrieval does not — so both corrupt the comparison the harness exists to make.
+Leaking the answer to a *reader*, in vocabulary the source does not use, is a
+different thing and is acceptable for a retrieval-only MVP; revisit it if generation
+and groundedness land in Phase 2.
+
+The containment score is **triage, not a gate**: its `>=0.50` threshold selects
+questions for human review, and the human decides. Rewriting a question purely to
+lower the number produces stilted phrasing that is no harder for BM25 to match. A
+question above the threshold is acceptable when a human has judged it well-paraphrased
+and recorded why in its `notes`.
+
+Coverage is judged over **documents, not facts**. A question contributes a query and
+a labelled set of relevant documents; which fact within a document it targets does not
+affect any metric. Spread across the corpus matters, and so does spread of retrieval
+difficulty; covering any particular myth or character does not.
+
 Unanswerable questions are drawn from mythologies outside the corpus (Norse,
 Egyptian, Arthurian, modern fantasy). Each must be verified absent from the corpus
 before inclusion — the source text is a *comparative* mythology work that name-drops

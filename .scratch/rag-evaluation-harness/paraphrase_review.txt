@@ -60,6 +60,10 @@ entity-05          0.36  By what clever scheme did Dido obtain enough land from 
                          source: 100_DIDO.md
                          overlapping terms: city, dido, found, land
 
+synthesis-01       0.36  Three different women in these myths are rooted to the spot and turned into plants, two of them through their connection to Apollo. Who are they and what plant did each become?
+                         source: 005_APOLLO_AND_DAPHNE.md
+                         overlapping terms: apollo, different, each, plants, two
+
 factual-01         0.33  What contrasting effects did Cupid's pair of shafts produce when he shot Apollo and Daphne with them?
                          source: 005_APOLLO_AND_DAPHNE.md
                          overlapping terms: apollo, cupid, daphne
@@ -72,10 +76,6 @@ synthesis-03       0.33  In two separate tales, a devoted spouse is fetched back
                          source: 071_ORPHEUS_AND_EURYDICE.md
                          overlapping terms: away, dead, death, each, himself, life, one, other, realm, soon, too
 
-synthesis-09       0.33  Two mortals who cross a virgin huntress-goddess or her jealous rival end up hunted to death or reduced to a beast's form as punishment — one is changed into an animal her own son nearly kills without recognizing her, the other is turned into a stag and torn apart by his own hounds. Who are these two figures and what triggered each punishment?
-                         source: 009_CALLISTO.md
-                         overlapping terms: beast, changed, form, goddess, huntress, one, other, own, rival, son, two
-
 entity-07          0.33  How did Daedalus break free from his place of captivity when travel by sea was blocked to him?
                          source: 051_DAEDALUS.md
                          overlapping terms: daedalus, him, sea
@@ -83,6 +83,10 @@ entity-07          0.33  How did Daedalus break free from his place of captivity
 synthesis-04       0.32  One demigod turns the giant Atlas to stone using a monster's severed head, while a later demigod briefly takes over Atlas's job of holding up the sky so the giant can run an errand for him. Who performs each of these two encounters with Atlas?
                          source: 034_PERSEUS_AND_ATLAS.md
                          overlapping terms: atlas, each, giant, head, him, one, over, stone
+
+synthesis-09       0.32  Two mortals receive punishment from a virgin huntress-goddess or her jealous rival, one for becoming pregnant with a god's child, the other for unluckily encountering a nude goddess. What became of each of them, and how deserving was the punishment received?
+                         source: 009_CALLISTO.md
+                         overlapping terms: became, goddess, huntress, one, other, rival, two
 
 factual-15         0.29  What happened to Dido after unsuccessful attempts to convince Aeneas to stay with her?
                          source: 100_DIDO.md
@@ -95,10 +99,6 @@ synthesis-10       0.26  The god of the forge helps two different figures in mom
 factual-11         0.25  Why does Alcestis almost perish, and whose fault is it?
                          source: 068_ADMETUS_AND_ALCESTIS.md
                          overlapping terms: alcestis
-
-synthesis-01       0.25  Three different women are transformed into some type of tree, shrub, or flower. Who are they and what plant did each become?
-                         source: 005_APOLLO_AND_DAPHNE.md
-                         overlapping terms: different, each, tree
 
 synthesis-02       0.25  Two beautiful young men transformed into plants, one from a fatal accident with a god, the other from their own self-obsession. Name both youths and the flower each became.
                          source: 020_APOLLO_AND_HYACINTHUS.md

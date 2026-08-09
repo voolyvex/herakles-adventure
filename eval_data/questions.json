@@ -133,11 +133,11 @@
     },
     {
       "id": "synthesis-01",
-      "question": "Three different women are transformed into some type of tree, shrub, or flower. Who are they and what plant did each become?",
+      "question": "Three different women in these myths are rooted to the spot and turned into plants, two of them through their connection to Apollo. Who are they and what plant did each become?",
       "stratum": "synthesis",
       "relevance": {},
       "source_document": "005_APOLLO_AND_DAPHNE.md",
-      "notes": "Multi-hop: also draws on 028_CLYTIE.md, 018_DRYOPE.md. Paraphrased in the ticket #8 review pass (author wording); the earlier draft named the three plants (laurel, sunflower, lotus) and so answered its own second half. NOTE FOR LABELLING: dropping the named plants also dropped the only constraint selecting these three women specifically -- the corpus contains other plant transformations, so the intended triple (Daphne, Clytie, Dryope) is no longer uniquely determined by the question text. Decide at the labelling sitting whether to accept any valid triple or to re-narrow the question."
+      "notes": "Multi-hop: also draws on 028_CLYTIE.md, 018_DRYOPE.md. Paraphrased in the ticket #8 review pass; the earlier draft named the three plants (laurel, sunflower, lotus) and so answered its own second half. Re-narrowed with the Apollo connection so the intended triple (Daphne, Clytie, Dryope) stays determined without naming the outcomes."
     },
     {
       "id": "synthesis-02",
@@ -197,11 +197,11 @@
     },
     {
       "id": "synthesis-09",
-      "question": "Two mortals who cross a virgin huntress-goddess or her jealous rival end up hunted to death or reduced to a beast's form as punishment — one is changed into an animal her own son nearly kills without recognizing her, the other is turned into a stag and torn apart by his own hounds. Who are these two figures and what triggered each punishment?",
+      "question": "Two mortals receive punishment from a virgin huntress-goddess or her jealous rival, one for becoming pregnant with a god's child, the other for unluckily encountering a nude goddess. What became of each of them, and how deserving was the punishment received?",
       "stratum": "synthesis",
       "relevance": {},
       "source_document": "009_CALLISTO.md",
-      "notes": "Multi-hop: also draws on 010_DIANA_AND_ACTAEON.md"
+      "notes": "Multi-hop: also draws on 010_DIANA_AND_ACTAEON.md. Paraphrased in the ticket #8 review pass (author wording). The earlier draft stated both transformations ('changed into an animal her own son nearly kills', 'turned into a stag and torn apart by his own hounds'), which answered its own second half and duplicated factual-02's target fact. Now describes each offence instead, leaving both outcomes to be retrieved."
     },
     {
       "id": "synthesis-10",
