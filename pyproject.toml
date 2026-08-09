@@ -103,6 +103,12 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The heavy tests are opt-in: run them with `pytest -m heavy`. They must not be
+# in the default run, because importing torch and chromadb into the process is
+# exactly what the no-heavy-imports guards in test_runner and test_metrics
+# assert has not happened — collecting both in one process fails those guards
+# by collection order alone.
+addopts = ["-m", "not heavy"]
 markers = [
     # Tests that construct the real retrieval stack — torch, chromadb and a
     # sentence-transformers model. Deselect with -m "not heavy" on a machine
