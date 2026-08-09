@@ -1,76 +1,48 @@
 id                score  question
 ----------------------------------------------------------------------------------------------------
-factual-01         0.73  In the story of Apollo and Daphne, what two different effects did Cupid's pair of arrows produce when he struck Apollo and Daphne with them?
-                         source: 005_APOLLO_AND_DAPHNE.md
-                         overlapping terms: apollo, arrows, cupid, daphne, different, story, struck, two
-
-entity-01          0.69  Who gently carried the grieving Psyche off the mountain ledge where she had been abandoned and set her down safely in a flowery valley?
+factual-03         0.45  Which tiny labourers pitied Psyche and finished dividing the jumbled pile of grain Venus had set before her?
                          source: 023_CUPID_AND_PSYCHE.md
-                         overlapping terms: abandoned, down, flowery, mountain, off, psyche, safely, set, valley
+                         overlapping terms: grain, pile, psyche, set, venus
 
-factual-12         0.67  How does a new Phoenix come into existence after its predecessor dies?
-                         source: 133_THE_PHOENIX.md
-                         overlapping terms: existence, new, phoenix, predecessor
-
-factual-06         0.64  What kind of guardian did King AEetes station to watch over the Golden Fleece in its sacred grove?
-                         source: 043_THE_GOLDEN_FLEECE.md
-                         overlapping terms: aeetes, fleece, golden, grove, kind, king, over
-
-factual-08         0.60  What caused the feathers to detach from Icarus's wings while he was flying too close to the sun?
-                         source: 051_DAEDALUS.md
-                         overlapping terms: feathers, icarus, sun, too, while, wings
-
-synthesis-08       0.60  The sorceress who helps a young hero steal a golden treasure guarded by a dragon, using her magic to protect him from fire-breathing bulls and to put the dragon to sleep, later turns against a different young hero from the same royal family and tries to have him poisoned. Name the sorceress and both heroes.
-                         source: 043_THE_GOLDEN_FLEECE.md
-                         overlapping terms: against, breathing, bulls, dragon, family, fire, golden, guarded, hero, heroes, him, name, put, royal, same, sleep, sorceress, young
-
-factual-03         0.59  When Venus set Psyche the seemingly impossible chore of separating a huge mixed heap of grain, what small creatures took pity on her and completed the sorting?
-                         source: 023_CUPID_AND_PSYCHE.md
-                         overlapping terms: creatures, grain, heap, pity, psyche, separating, set, sorting, took, venus
-
-factual-14         0.58  What goddess did Ceres send to inflict unending hunger on Erisichthon as retribution for cutting down her sacred oak?
-                         source: 056_ERISICHTHON.md
-                         overlapping terms: ceres, down, erisichthon, goddess, hunger, oak, sacred
-
-factual-13         0.56  What penalty did Apollo impose on Marsyas for daring to challenge him to a music contest?
-                         source: 076_MARSYAS.md
-                         overlapping terms: apollo, challenge, contest, him, marsyas
-
-factual-10         0.55  Which goddess accidentally killed Orion by shooting him while he was wading far out at sea?
-                         source: 085_ORION.md
-                         overlapping terms: goddess, him, orion, out, sea, wading
-
-factual-07         0.54  What signal did Theseus forget to change on his return voyage, leading his father to believe he had died and take his own life?
+factual-07         0.45  Which token did Theseus neglect to swap on his homeward voyage, so that his father despaired and threw himself to his death?
                          source: 049_THESEUS.md
-                         overlapping terms: change, father, life, own, signal, take, theseus
+                         overlapping terms: death, father, himself, theseus, token
 
-factual-05         0.50  What curse did Minerva place on Medusa that gave her snakes for hair and the power to petrify onlookers?
-                         source: 033_PERSEUS_AND_MEDUSA.md
-                         overlapping terms: gave, hair, medusa, minerva, power
-
-factual-15         0.50  How did Dido end her life after Aeneas departed from Carthage?
-                         source: 100_DIDO.md
-                         overlapping terms: aeneas, carthage, dido
-
-entity-04          0.50  What effect did Orpheus's talent for music have on wild creatures and the natural landscape around him?
-                         source: 071_ORPHEUS_AND_EURYDICE.md
-                         overlapping terms: around, him, music, orpheus, wild
-
-entity-08          0.50  What did Calypso propose to Ulysses in her attempt to keep him from returning to his homeland?
-                         source: 096_CALYPSO.md
-                         overlapping terms: calypso, him, keep, ulysses
+factual-01         0.44  Which of Cupid's two shafts kindled desire and which drove it away, and who received each?
+                         source: 005_APOLLO_AND_DAPHNE.md
+                         overlapping terms: away, cupid, each, two
 
 factual-04         0.44  What lasting restriction did Juno place on the nymph Echo's speech as punishment for distracting her?
                          source: 027_ECHO_AND_NARCISSUS.md
                          overlapping terms: echo, juno, nymph, place
 
+factual-14         0.44  Which emaciated personification of insatiable hunger was dispatched against Erisichthon at Ceres's bidding?
+                         source: 056_ERISICHTHON.md
+                         overlapping terms: against, ceres, erisichthon, hunger
+
 entity-02          0.44  Which two divine allies equipped Perseus with a mirror-like shield and winged footwear so he could approach Medusa without meeting her gaze directly?
                          source: 033_PERSEUS_AND_MEDUSA.md
                          overlapping terms: directly, like, medusa, perseus, shield, winged, without
 
+factual-05         0.43  What transformation did Minerva work upon Medusa, and what offence brought it about?
+                         source: 033_PERSEUS_AND_MEDUSA.md
+                         overlapping terms: medusa, minerva, upon
+
+factual-08         0.43  Why did the plumage on Icarus's contrivance separate as he climbed toward the heat?
+                         source: 051_DAEDALUS.md
+                         overlapping terms: heat, icarus, plumage
+
 factual-09         0.43  What caused Eurydice's fatal snakebite as she fled from an unwanted admirer?
                          source: 071_ORPHEUS_AND_EURYDICE.md
                          overlapping terms: eurydice, fatal, fled
+
+entity-04          0.43  What effect did Orpheus's music have on nature, animals, and other people?
+                         source: 071_ORPHEUS_AND_EURYDICE.md
+                         overlapping terms: music, orpheus, other
+
+entity-08          0.43  What incentive did Calypso give to Ulysses to entice him to stay?
+                         source: 096_CALYPSO.md
+                         overlapping terms: calypso, him, ulysses
 
 factual-02         0.42  After a hunter stumbled upon her bathing, into what creature did the goddess Diana shapeshift him so that his own hounds would kill him?
                          source: 010_DIANA_AND_ACTAEON.md
@@ -84,9 +56,17 @@ synthesis-06       0.41  Two different women in mythology unleash disaster on th
                          source: 003_PROMETHEUS_AND_PANDORA.md
                          overlapping terms: curiosity, different, either, giving, lost, one, thing, women, world
 
+factual-06         0.38  What sort of beast never slept while keeping guard on the ram's golden hide in AEetes's holy thicket?
+                         source: 043_THE_GOLDEN_FLEECE.md
+                         overlapping terms: aeetes, golden, never, ram, while
+
 factual-11         0.38  Which hero wrestled with Death itself to bring Alcestis back to her husband?
                          source: 068_ADMETUS_AND_ALCESTIS.md
                          overlapping terms: alcestis, death, husband
+
+factual-12         0.38  By what process does the bird renew itself once the elder one perishes?
+                         source: 133_THE_PHOENIX.md
+                         overlapping terms: bird, itself, one
 
 synthesis-02       0.37  Two beautiful young men in these stories die and are commemorated by having a flower spring from the site of their death — one from a fatal accident during a game with a god, the other from wasting away over his own reflection. Name both youths and the flower each became.
                          source: 020_APOLLO_AND_HYACINTHUS.md
@@ -104,6 +84,10 @@ synthesis-09       0.33  Two mortals who cross a virgin huntress-goddess or her 
                          source: 009_CALLISTO.md
                          overlapping terms: beast, changed, form, goddess, huntress, one, other, own, rival, son, two
 
+entity-01          0.33  Which west wind lifted the weeping bride from the crag where her family had left her and settled her gently in a blossoming dale?
+                         source: 023_CUPID_AND_PSYCHE.md
+                         overlapping terms: bride, dale, left, weeping
+
 entity-07          0.33  How did Daedalus break free from his place of captivity when travel by sea was blocked to him?
                          source: 051_DAEDALUS.md
                          overlapping terms: daedalus, him, sea
@@ -112,9 +96,17 @@ synthesis-04       0.32  One demigod turns the giant Atlas to stone using a mons
                          source: 034_PERSEUS_AND_ATLAS.md
                          overlapping terms: atlas, each, giant, head, him, one, over, stone
 
+factual-15         0.29  What happened to Dido after unsuccessful attempts to convince Aeneas to stay with her?
+                         source: 100_DIDO.md
+                         overlapping terms: aeneas, dido
+
 synthesis-10       0.26  The god of the forge helps two different figures in moments of desperate need — guiding a blinded giant hunter to a cure for his sight, and later working through the night to build replacement battle-gear for a grieving warrior about to avenge a fallen friend. Who receives each of these two gifts from the smith-god?
                          source: 085_ORION.md
                          overlapping terms: blinded, different, forge, giant, god, hunter, night, sight
+
+factual-13         0.22  What grisly fate befell the satyr who lost his musical duel against Apollo?
+                         source: 076_MARSYAS.md
+                         overlapping terms: apollo, musical
 
 entity-06          0.21  What became of the gifted weaver Arachne after she claimed her craftsmanship equaled a goddess's, and how does her fate account for a common eight-legged arachnid?
                          source: 030_MINERVA.md
@@ -123,6 +115,14 @@ entity-06          0.21  What became of the gifted weaver Arachne after she clai
 synthesis-07       0.18  Two queens fall in love with a foreign hero who has just arrived by sea after fleeing his homeland, host him generously, and are then abandoned when he continues his journey. One dies by her own hand in despair; the other is comforted and ends up married to a god instead. Name both women and the heroes who left them.
                          source: 100_DIDO.md
                          overlapping terms: arrived, both, fall, him, own, women
+
+factual-10         0.17  Which divine huntress unwittingly slew her companion Orion with an arrow, tricked into aiming at a dark speck on the water?
+                         source: 085_ORION.md
+                         overlapping terms: orion, water
+
+synthesis-08       0.15  An enchantress aids a newcomer in carrying off a prized ram's pelt from her own father's realm, charming the fire-snorting oxen and lulling its scaled sentinel; years later, remarried in Athens, she schemes to poison a different newcomer who turns out to be her husband's long-lost heir. Identify the enchantress and the two men.
+                         source: 043_THE_GOLDEN_FLEECE.md
+                         overlapping terms: fire, men, out, ram, two
 
 entity-03          0.11  What ocean-going emblem of authority did Neptune carry, and what natural forces could he command with it?
                          source: 059_NEPTUNE.md
@@ -134,5 +134,5 @@ synthesis-05       0.03  Two Greek heroes overcome a fearsome creature only beca
 
 ====================================================================================================
 Total in-corpus questions scored: 33
-High containment (>=0.5, needs paraphrase review): 15 -> ['factual-01', 'entity-01', 'factual-12', 'factual-06', 'factual-08', 'synthesis-08', 'factual-03', 'factual-14', 'factual-13', 'factual-10', 'factual-07', 'factual-05', 'factual-15', 'entity-04', 'entity-08']
+High containment (>=0.5, needs paraphrase review): 0 -> []
 Near-zero containment (<=0.05, candidates for 'absent vocabulary' criterion): 1 -> ['synthesis-05']
