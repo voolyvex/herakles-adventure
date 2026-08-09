@@ -14,11 +14,11 @@
   "questions": [
     {
       "id": "factual-01",
-      "question": "Which of Cupid's two shafts kindled desire and which drove it away, and who received each?",
+      "question": "What contrasting effects did Cupid's pair of shafts produce when he shot Apollo and Daphne with them?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "005_APOLLO_AND_DAPHNE.md",
-      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording, with 'different'->'contrasting' and 'arrows'->'shafts' to clear the containment threshold)."
     },
     {
       "id": "factual-02",
@@ -70,11 +70,11 @@
     },
     {
       "id": "factual-08",
-      "question": "Why did the plumage on Icarus's contrivance separate as he climbed toward the heat?",
+      "question": "What exactly caused the failure of Icarus's new-found ability of flight?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "051_DAEDALUS.md",
-      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Does not name the sun or the wax; both must be retrieved."
     },
     {
       "id": "factual-09",
@@ -85,26 +85,27 @@
     },
     {
       "id": "factual-10",
-      "question": "Which divine huntress unwittingly slew her companion Orion with an arrow, tricked into aiming at a dark speck on the water?",
+      "question": "Which goddess fires an arrow at Orion and who or what prompted her to do it?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "085_ORION.md",
-      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). The earlier draft said 'which divine huntress', very nearly a definite description of Diana; 'which goddess' restores the wider category. Second part targets Apollo goading her into the shot."
     },
     {
       "id": "factual-11",
-      "question": "Which hero wrestled with Death itself to bring Alcestis back to her husband?",
+      "question": "Why does Alcestis almost perish, and whose fault is it?",
       "stratum": "factual",
       "relevance": {},
-      "source_document": "068_ADMETUS_AND_ALCESTIS.md"
+      "source_document": "068_ADMETUS_AND_ALCESTIS.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording, 'die'->'perish' to clear the containment threshold). Retargeted from the earlier draft, which asked which hero 'wrestled with Death' -- that named Hercules's unique identifying act in the question itself, and duplicated synthesis-03's second hop. This version targets the substitution bargain instead (Apollo and the Fates, Admetus's failed search for a substitute, Alcestis volunteering)."
     },
     {
       "id": "factual-12",
-      "question": "By what process does the bird renew itself once the elder one perishes?",
+      "question": "By what process does the phoenix renew itself once the elder one perishes?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "133_THE_PHOENIX.md",
-      "notes": "Paraphrased in the ticket #8 review pass. Deliberately uses vocabulary absent from the source passage (source describes the old bird dying on a nest and a young Phoenix issuing from its body; the question avoids 'Phoenix', 'nest', 'dies' and 'issues')."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Deliberately avoids the source's own phrasing for the renewal (source: the old bird dies on a nest and a young Phoenix 'issues forth' from its body)."
     },
     {
       "id": "factual-13",
@@ -116,11 +117,11 @@
     },
     {
       "id": "factual-14",
-      "question": "Which emaciated personification of insatiable hunger was dispatched against Erisichthon at Ceres's bidding?",
+      "question": "Why didn't Ceres ask Famine directly to inflict punishment on Erisichthon, and who was sent instead?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "056_ERISICHTHON.md",
-      "notes": "Paraphrased in the ticket #8 review pass. Earlier wording called the dispatched figure a 'goddess Ceres sent'; the source has Ceres send an Oread to summon Famine, who is the one that inflicts the hunger. Reworded so the target fact (Famine) is stated correctly."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Retargeted from the earlier draft: the previous version asked which 'goddess Ceres sent' to inflict the hunger, which mis-stated the source (Ceres sends an Oread to summon Famine). This version asks the two facts the passage actually gives -- the Fates forbid the two goddesses to meet, so an Oread carries the message."
     },
     {
       "id": "factual-15",
@@ -212,11 +213,11 @@
     },
     {
       "id": "entity-01",
-      "question": "Which west wind lifted the weeping bride from the crag where her family had left her and settled her gently in a blossoming dale?",
+      "question": "What or who carries the distraught Psyche from the cliff to a nice botanical landing spot?",
       "stratum": "entity",
       "relevance": {},
       "source_document": "023_CUPID_AND_PSYCHE.md",
-      "notes": "Rewritten from an earlier draft to avoid overlapping factual-03, which already covers the seed-sorting task; this question targets a different fact (the mountain rescue by Zephyr) from the same source file. Paraphrased again in the ticket #8 review pass."
+      "notes": "Rewritten from an earlier draft to avoid overlapping factual-03, which already covers the seed-sorting task; this question targets a different fact (the mountain rescue by Zephyr) from the same source file. Paraphrased again in the ticket #8 review pass (author wording). The earlier draft asked 'which west wind', which handed over Zephyr's defining attribute; 'what or who' keeps both readings open."
     },
     {
       "id": "entity-02",
