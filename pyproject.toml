@@ -103,6 +103,14 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    # Tests that construct the real retrieval stack — torch, chromadb and a
+    # sentence-transformers model. Deselect with -m "not heavy" on a machine
+    # without the models. Everything else in the suite must stay free of them:
+    # several tests assert the heavy modules are absent from sys.modules, so a
+    # heavy test must import them inside the test body, never at module level.
+    "heavy: requires the embedding model and vector store",
+]
 
 [tool.uv]
 # UV-specific settings can go here

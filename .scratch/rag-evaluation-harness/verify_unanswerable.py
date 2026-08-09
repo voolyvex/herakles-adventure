@@ -18,11 +18,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+# This script lives two directories below the repository root. Put that root on
+# the import path so myth_eval and rag_system are importable no matter which
+# directory the script is invoked from.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 def main() -> int:
@@ -30,19 +34,19 @@ def main() -> int:
         print(f"usage: {sys.argv[0]} drafts.json", file=sys.stderr)
         return 1
 
-    from myth_eval.index import DEFAULT_EMBEDDING_MODEL, index_root, repository_root
+    from myth_eval.index import DEFAULT_EMBEDDING_MODEL, index_root
     from myth_eval.retrieval import DenseRetrieverAdapter
 
-    previous = Path.cwd()
-    try:
-        os.chdir(repository_root())
-        from rag_system import RAGSystem
+    store = index_root()
 
-        system = RAGSystem(embedding_model_name=DEFAULT_EMBEDDING_MODEL)
-    finally:
-        os.chdir(previous)
+    from rag_system import RAGSystem
 
-    print(f"Index in use: {index_root()}", file=sys.stderr)
+    system = RAGSystem(
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+        store_dir=str(store),
+    )
+
+    print(f"Index in use: {store}", file=sys.stderr)
 
     dense = DenseRetrieverAdapter(system.agentic_rag.dense)
 
