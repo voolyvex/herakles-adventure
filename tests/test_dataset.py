@@ -125,3 +125,53 @@ class TestDataset:
         second = dataset.save(tmp_path / "b.json").read_text(encoding="utf-8")
 
         assert first == second
+
+
+class TestDocumentCoverage:
+    """Spread across the corpus is a status a human reads, not a gate this
+    module enforces (spec.md: "spread across the corpus matters"; no
+    threshold is chosen here — see ticket #12)."""
+
+    @pytest.fixture
+    def dataset(self) -> Dataset:
+        return Dataset(
+            questions=[
+                Question(id="f1", question="a", stratum=Stratum.FACTUAL,
+                          source_document="005_APOLLO_AND_DAPHNE.md"),
+                Question(id="f2", question="b", stratum=Stratum.FACTUAL,
+                          source_document="005_APOLLO_AND_DAPHNE.md"),
+                Question(id="s1", question="c", stratum=Stratum.SYNTHESIS,
+                          source_document="071_ORPHEUS_AND_EURYDICE.md"),
+                Question(id="u1", question="d", stratum=Stratum.UNANSWERABLE),
+            ]
+        )
+
+    def test_source_documents_deduplicates_and_excludes_unanswerable(self, dataset):
+        """Two questions can share a source document (multi-hop siblings do);
+        unanswerable questions carry no source_document by construction."""
+        assert dataset.source_documents() == [
+            "005_APOLLO_AND_DAPHNE.md",
+            "071_ORPHEUS_AND_EURYDICE.md",
+        ]
+
+    def test_document_coverage_reports_distinct_count_against_corpus_size(self, dataset):
+        assert dataset.document_coverage(corpus_size=164) == {
+            "distinct_source_documents": 2,
+            "corpus_size": 164,
+            "fraction": round(2 / 164, 4),
+        }
+
+    def test_document_coverage_handles_a_zero_corpus_size(self, dataset):
+        """Guards the division; corpus_size=0 has no real caller but should
+        not raise."""
+        assert dataset.document_coverage(corpus_size=0)["fraction"] == 0.0
+
+    def test_to_dict_omits_coverage_when_corpus_size_is_not_supplied(self, dataset):
+        assert "document_coverage" not in dataset.to_dict()
+
+    def test_to_dict_includes_coverage_when_corpus_size_is_supplied(self, dataset):
+        assert dataset.to_dict(corpus_size=164)["document_coverage"] == {
+            "distinct_source_documents": 2,
+            "corpus_size": 164,
+            "fraction": round(2 / 164, 4),
+        }

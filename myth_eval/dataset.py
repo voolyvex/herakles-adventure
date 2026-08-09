@@ -155,12 +155,43 @@ class Dataset:
             if self.by_stratum(stratum)
         }
 
+    def source_documents(self) -> List[str]:
+        """Distinct source documents referenced by in-corpus questions.
+
+        Unanswerable questions carry no ``source_document`` by construction
+        (spec.md: they are drawn from mythologies outside the corpus) and are
+        excluded. This is spread over *questions' declared source*, not over
+        the pooled relevance labels — the pool (#9) may touch more documents
+        than this once populated, since pooling draws from every arm's
+        results, not just each question's origin chunk.
+        """
+        return sorted(
+            {q.source_document for q in self.questions if q.source_document}
+        )
+
+    def document_coverage(self, corpus_size: int) -> Dict[str, Any]:
+        """How much of the corpus the question set's declared sources touch.
+
+        Not a gate. Spec.md says spread across the corpus matters more than
+        depth on any one document, but nothing enforces that today — this is
+        the visibility the harness offers a human deciding whether coverage
+        is thin. ``corpus_size`` is a caller-supplied count (e.g. the number
+        of files under ``lore_chunks/``) rather than something this module
+        discovers itself, so ``Dataset`` stays free of filesystem I/O.
+        """
+        documents = self.source_documents()
+        return {
+            "distinct_source_documents": len(documents),
+            "corpus_size": corpus_size,
+            "fraction": round(len(documents) / corpus_size, 4) if corpus_size else 0.0,
+        }
+
     @property
     def is_labelled(self) -> bool:
         """Whether every question has ground truth, i.e. grading has happened."""
         return bool(self.questions) and all(q.is_labelled for q in self.questions)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, corpus_size: Optional[int] = None) -> Dict[str, Any]:
         data: Dict[str, Any] = {
             # Provenance: which chunking regime the labels were gathered under.
             # Labels attach to source documents so they survive re-chunking, but
@@ -175,6 +206,11 @@ class Dataset:
         }
         if self.embedding_model:
             data["provenance"]["embedding_model"] = self.embedding_model
+        if corpus_size is not None:
+            # Status only, not a gate: see document_coverage(). A floor for
+            # this number, if one gets adopted, is decided in #12 alongside
+            # the nDCG regression tolerance, not enforced here.
+            data["document_coverage"] = self.document_coverage(corpus_size)
         if self.notes:
             data["notes"] = self.notes
         return data
@@ -196,11 +232,11 @@ class Dataset:
         target = path if path is not None else default_dataset_path()
         return cls.from_dict(json.loads(Path(target).read_text(encoding="utf-8")))
 
-    def save(self, path: Optional[Path] = None) -> Path:
+    def save(self, path: Optional[Path] = None, corpus_size: Optional[int] = None) -> Path:
         target = Path(path) if path is not None else default_dataset_path()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
-            json.dumps(self.to_dict(), indent=2, ensure_ascii=False) + "\n",
+            json.dumps(self.to_dict(corpus_size), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         return target
