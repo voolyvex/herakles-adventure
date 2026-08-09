@@ -1,0 +1,138 @@
+id                score  question
+----------------------------------------------------------------------------------------------------
+factual-03         0.45  Which tiny labourers pitied Psyche and finished dividing the jumbled pile of grain Venus had set before her?
+                         source: 023_CUPID_AND_PSYCHE.md
+                         overlapping terms: grain, pile, psyche, set, venus
+
+factual-07         0.45  Which token did Theseus neglect to swap on his homeward voyage, so that his father despaired and threw himself to his death?
+                         source: 049_THESEUS.md
+                         overlapping terms: death, father, himself, theseus, token
+
+factual-05         0.43  What transformation did Minerva work upon Medusa, and what offence brought it about?
+                         source: 033_PERSEUS_AND_MEDUSA.md
+                         overlapping terms: medusa, minerva, upon
+
+factual-09         0.43  What caused Eurydice's fatal snakebite as she fled from an unwanted admirer?
+                         source: 071_ORPHEUS_AND_EURYDICE.md
+                         overlapping terms: eurydice, fatal, fled
+
+entity-04          0.43  What effect did Orpheus's music have on nature, animals, and other people?
+                         source: 071_ORPHEUS_AND_EURYDICE.md
+                         overlapping terms: music, orpheus, other
+
+entity-08          0.43  What incentive did Calypso give to Ulysses to entice him to stay?
+                         source: 096_CALYPSO.md
+                         overlapping terms: calypso, him, ulysses
+
+synthesis-06       0.41  Two different women in mythology unleash disaster on the world simply by giving in to curiosity and opening a sealed container they had been warned not to touch. Who are they, what did each container hold, and what was the one thing that was not lost in either case?
+                         source: 003_PROMETHEUS_AND_PANDORA.md
+                         overlapping terms: curiosity, different, either, giving, lost, one, thing, women, world
+
+factual-02         0.40  After a hunter stumbled upon her bathing, what did Diana do to him that would cause his own dogs to kill him?
+                         source: 010_DIANA_AND_ACTAEON.md
+                         overlapping terms: diana, dogs, him, own
+
+factual-10         0.40  Which goddess fires an arrow at Orion and who or what prompted her to do it?
+                         source: 085_ORION.md
+                         overlapping terms: goddess, orion
+
+factual-14         0.40  Why didn't Ceres ask Famine directly to inflict punishment on Erisichthon, and who was sent instead?
+                         source: 056_ERISICHTHON.md
+                         overlapping terms: ceres, erisichthon, famine, punishment
+
+factual-06         0.38  What sort of beast never slept while keeping guard on the ram's golden hide in AEetes's holy thicket?
+                         source: 043_THE_GOLDEN_FLEECE.md
+                         overlapping terms: aeetes, golden, never, ram, while
+
+factual-08         0.38  What exactly caused the failure of Icarus's new-found ability of flight?
+                         source: 051_DAEDALUS.md
+                         overlapping terms: flight, found, icarus
+
+factual-12         0.38  By what process does the phoenix renew itself once the elder one perishes?
+                         source: 133_THE_PHOENIX.md
+                         overlapping terms: itself, one, phoenix
+
+entity-02          0.38  Who equipped Perseus with the buckler and footwear enabling him to withstand Medusa?
+                         source: 033_PERSEUS_AND_MEDUSA.md
+                         overlapping terms: him, medusa, perseus
+
+entity-05          0.36  By what clever scheme did Dido obtain enough land from the local inhabitants to found her new city?
+                         source: 100_DIDO.md
+                         overlapping terms: city, dido, found, land
+
+synthesis-01       0.36  Three different women in these myths are rooted to the spot and turned into plants, two of them through their connection to Apollo. Who are they and what plant did each become?
+                         source: 005_APOLLO_AND_DAPHNE.md
+                         overlapping terms: apollo, different, each, plants, two
+
+factual-01         0.33  What contrasting effects did Cupid's pair of shafts produce when he shot Apollo and Daphne with them?
+                         source: 005_APOLLO_AND_DAPHNE.md
+                         overlapping terms: apollo, cupid, daphne
+
+factual-04         0.33  What was the offense of Echo that led Juno to punish her so severely?
+                         source: 027_ECHO_AND_NARCISSUS.md
+                         overlapping terms: echo, juno
+
+synthesis-03       0.33  In two separate tales, a devoted spouse is fetched back from the realm of the dead — one attempt fails because the rescuer looks back too soon, the other succeeds because a visiting hero physically wrestles the spouse's life away from Death himself. Identify the couples in each case and how the outcomes differed.
+                         source: 071_ORPHEUS_AND_EURYDICE.md
+                         overlapping terms: away, dead, death, each, himself, life, one, other, realm, soon, too
+
+entity-07          0.33  How did Daedalus break free from his place of captivity when travel by sea was blocked to him?
+                         source: 051_DAEDALUS.md
+                         overlapping terms: daedalus, him, sea
+
+synthesis-04       0.32  One demigod turns the giant Atlas to stone using a monster's severed head, while a later demigod briefly takes over Atlas's job of holding up the sky so the giant can run an errand for him. Who performs each of these two encounters with Atlas?
+                         source: 034_PERSEUS_AND_ATLAS.md
+                         overlapping terms: atlas, each, giant, head, him, one, over, stone
+
+synthesis-09       0.32  Two mortals receive punishment from a virgin huntress-goddess or her jealous rival, one for becoming pregnant with a god's child, the other for unluckily encountering a nude goddess. What became of each of them, and how deserving was the punishment received?
+                         source: 009_CALLISTO.md
+                         overlapping terms: became, goddess, huntress, one, other, rival, two
+
+factual-15         0.29  What happened to Dido after unsuccessful attempts to convince Aeneas to stay with her?
+                         source: 100_DIDO.md
+                         overlapping terms: aeneas, dido
+
+synthesis-10       0.26  The god of the forge helps two different figures in moments of desperate need — guiding a blinded giant hunter to a cure for his sight, and later working through the night to build replacement battle-gear for a grieving warrior about to avenge a fallen friend. Who receives each of these two gifts from the smith-god?
+                         source: 085_ORION.md
+                         overlapping terms: blinded, different, forge, giant, god, hunter, night, sight
+
+factual-11         0.25  Why does Alcestis almost perish, and whose fault is it?
+                         source: 068_ADMETUS_AND_ALCESTIS.md
+                         overlapping terms: alcestis
+
+synthesis-02       0.25  Two beautiful young men transformed into plants, one from a fatal accident with a god, the other from their own self-obsession. Name both youths and the flower each became.
+                         source: 020_APOLLO_AND_HYACINTHUS.md
+                         overlapping terms: beautiful, flower, god, name, one
+
+entity-01          0.25  What or who carries the distraught Psyche from the cliff to a nice botanical landing spot?
+                         source: 023_CUPID_AND_PSYCHE.md
+                         overlapping terms: psyche, spot
+
+entity-06          0.25  What became of the gifted weaver Arachne after she claimed her craftsmanship equaled a goddess's?
+                         source: 030_MINERVA.md
+                         overlapping terms: arachne, goddess
+
+factual-13         0.22  What grisly fate befell the satyr who lost his musical duel against Apollo?
+                         source: 076_MARSYAS.md
+                         overlapping terms: apollo, musical
+
+synthesis-07       0.18  Two queens fall in love with a foreign hero who has just arrived by sea after fleeing his homeland, host him generously, and are then abandoned when he continues his journey. One dies by her own hand in despair; the other is comforted and ends up married to a god instead. Name both women and the heroes who left them.
+                         source: 100_DIDO.md
+                         overlapping terms: arrived, both, fall, him, own, women
+
+synthesis-08       0.15  An enchantress aids a newcomer in carrying off a prized ram's pelt from her own father's realm, charming the fire-snorting oxen and lulling its scaled sentinel; years later, remarried in Athens, she schemes to poison a different newcomer who turns out to be her husband's long-lost heir. Identify the enchantress and the two men.
+                         source: 043_THE_GOLDEN_FLEECE.md
+                         overlapping terms: fire, men, out, ram, two
+
+entity-03          0.11  What ocean-going emblem of authority did Neptune carry, and what natural forces could he command with it?
+                         source: 059_NEPTUNE.md
+                         overlapping terms: neptune
+
+synthesis-05       0.03  Two Greek heroes overcome a fearsome creature only because they are given a clever workaround for a fatal direct encounter — one avoids meeting a lethal gaze by watching a mirrored surface instead, the other is given a way to retrace an otherwise impossible path back out after the kill. Who are these two heroes, and what creature did each defeat?
+                         source: 033_PERSEUS_AND_MEDUSA.md
+                         overlapping terms: each
+
+====================================================================================================
+Total in-corpus questions scored: 33
+High containment (>=0.5, needs paraphrase review): 0 -> []
+Near-zero containment (<=0.05, candidates for 'absent vocabulary' criterion): 1 -> ['synthesis-05']

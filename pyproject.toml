@@ -2,7 +2,7 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# Add this section to allow direct references
+# Allow direct references (needed for the spaCy model wheel URL below)
 [tool.hatch.metadata]
 allow-direct-references = true
 
@@ -14,20 +14,24 @@ readme = "README.md"
 authors = [
     { name = "voolyvex", email = "your.email@example.com" },
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "torch==2.4.1",
-    "torch-directml==0.2.5.dev240914",
+    # torch is left unpinned as to platform: the default PyPI wheel is CPU-only
+    # and installs everywhere. A DirectML or CUDA build is an opt-in extra
+    # (see [project.optional-dependencies]) rather than a hard requirement,
+    # because pinning a Windows/AMD-specific variant here makes the project
+    # uninstallable on Linux and therefore uninstallable in CI.
+    "torch>=2.4.1",
     "torchvision>=0.19.1",
     # Use a newer Transformers compatible with BGE reranker and chat templates
     "transformers>=4.52.0,<4.53",
@@ -42,35 +46,63 @@ dependencies = [
     "safetensors>=0.4.0",
     "rank_bm25>=0.2.2",
     "flashrank>=0.1.0",
-    "spacy>=3.7.0",
+    "spacy>=3.7.0,<3.9",
     "nltk>=3.8.1",
     "requests>=2.31.0",
-    # On non-Windows systems with CUDA, install flash-attn for performance.
-    # On Windows (with AMD/DirectML), this will be ignored, and the runtime
-    # patch in god_chat.py handles the model's dependency.
-    "flash-attn>=2.7.0; platform_system != 'Windows'",
-    # Optional: kernels recommended by gpt-oss model card (no-op if unused)
-    # Note: Version constraint removed due to availability issues
-    "kernels>=0.11.0"
+    # EntityAgent calls spacy.load("en_core_web_sm"). Model weights are not on
+    # PyPI, so they are declared here as a direct URL rather than left as an
+    # undeclared post-install step.
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
 ]
-
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",
     "isort>=5.0.0",
-    "mypy>=1.0.0"
+    "mypy>=1.0.0",
+]
+# Windows + AMD GPU acceleration. Opt-in: torch-directml publishes no Linux
+# wheels, so requiring it unconditionally breaks installation everywhere else.
+directml = [
+    "torch-directml==0.2.5.dev240914; platform_system == 'Windows'",
+]
+# CUDA-only performance extras. flash-attn builds from source and needs a CUDA
+# toolchain (nvcc) present at install time, so it cannot be a base dependency
+# on a machine without one — including CI runners.
+cuda = [
+    "flash-attn>=2.7.0",
+    "kernels>=0.11.0",
 ]
 
 [project.scripts]
 myth-rpg = "god_chat:main"
 
-[tool.hatch.build]
-packages = ["god_chat"]
-
+# The project is a flat layout: top-level modules plus the agents/ and utils/
+# packages. The previous `packages = ["god_chat"]` named a module, not a
+# package, so no build target matched it.
 [tool.hatch.build.targets.wheel]
-packages = ["god_chat"]
+packages = ["agents", "utils", "myth_eval"]
+include = [
+    "god_chat.py",
+    "main.py",
+    "rag_system.py",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "agents",
+    "utils",
+    "myth_eval",
+    "god_chat.py",
+    "main.py",
+    "rag_system.py",
+    "pyproject.toml",
+    "README.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.uv]
 # UV-specific settings can go here

@@ -1,0 +1,339 @@
+{
+  "provenance": {
+    "chunk_size_chars": 1200,
+    "chunk_overlap_chars": 200,
+    "corpus_dir": "lore_chunks",
+    "embedding_model": "BAAI/bge-small-en-v1.5"
+  },
+  "stratum_counts": {
+    "factual": 15,
+    "synthesis": 10,
+    "entity": 8,
+    "unanswerable": 8
+  },
+  "questions": [
+    {
+      "id": "factual-01",
+      "question": "What contrasting effects did Cupid's pair of shafts produce when he shot Apollo and Daphne with them?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "005_APOLLO_AND_DAPHNE.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording, with 'different'->'contrasting' and 'arrows'->'shafts' to clear the containment threshold)."
+    },
+    {
+      "id": "factual-02",
+      "question": "After a hunter stumbled upon her bathing, what did Diana do to him that would cause his own dogs to kill him?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "010_DIANA_AND_ACTAEON.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Deliberately uses vocabulary absent from the source passage (source describes stag features growing on Actaeon without naming the creature as the answer); the earlier draft asked 'into what creature', which narrowed the answer to a hunted animal."
+    },
+    {
+      "id": "factual-03",
+      "question": "Which tiny labourers pitied Psyche and finished dividing the jumbled pile of grain Venus had set before her?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "023_CUPID_AND_PSYCHE.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "factual-04",
+      "question": "What was the offense of Echo that led Juno to punish her so severely?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "027_ECHO_AND_NARCISSUS.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Retargeted: the earlier draft asked what 'restriction on speech' Juno imposed and stated the offence; this version asks for the offence and leaves the sentence to be retrieved."
+    },
+    {
+      "id": "factual-05",
+      "question": "What transformation did Minerva work upon Medusa, and what offence brought it about?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "033_PERSEUS_AND_MEDUSA.md",
+      "notes": "Paraphrased in the ticket #8 review pass. Deliberately uses vocabulary absent from the source passage (source says Minerva 'deprived her of her charms' and changed her ringlets into serpents; 'transformation' and 'offence' never appear). Earlier wording named the snakes and the petrifying gaze in the question itself, which made the question self-answering; the effects are now the thing to be retrieved."
+    },
+    {
+      "id": "factual-06",
+      "question": "What sort of beast never slept while keeping guard on the ram's golden hide in AEetes's holy thicket?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "043_THE_GOLDEN_FLEECE.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "factual-07",
+      "question": "Which token did Theseus neglect to swap on his homeward voyage, so that his father despaired and threw himself to his death?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "049_THESEUS.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "factual-08",
+      "question": "What exactly caused the failure of Icarus's new-found ability of flight?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "051_DAEDALUS.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Does not name the sun or the wax; both must be retrieved."
+    },
+    {
+      "id": "factual-09",
+      "question": "What caused Eurydice's fatal snakebite as she fled from an unwanted admirer?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "071_ORPHEUS_AND_EURYDICE.md"
+    },
+    {
+      "id": "factual-10",
+      "question": "Which goddess fires an arrow at Orion and who or what prompted her to do it?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "085_ORION.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). The earlier draft said 'which divine huntress', very nearly a definite description of Diana; 'which goddess' restores the wider category. Second part targets Apollo goading her into the shot."
+    },
+    {
+      "id": "factual-11",
+      "question": "Why does Alcestis almost perish, and whose fault is it?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "068_ADMETUS_AND_ALCESTIS.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording, 'die'->'perish' to clear the containment threshold). Retargeted from the earlier draft, which asked which hero 'wrestled with Death' -- that named Hercules's unique identifying act in the question itself, and duplicated synthesis-03's second hop. This version targets the substitution bargain instead (Apollo and the Fates, Admetus's failed search for a substitute, Alcestis volunteering)."
+    },
+    {
+      "id": "factual-12",
+      "question": "By what process does the phoenix renew itself once the elder one perishes?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "133_THE_PHOENIX.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Deliberately avoids the source's own phrasing for the renewal (source: the old bird dies on a nest and a young Phoenix 'issues forth' from its body)."
+    },
+    {
+      "id": "factual-13",
+      "question": "What grisly fate befell the satyr who lost his musical duel against Apollo?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "076_MARSYAS.md",
+      "notes": "Paraphrased in the ticket #8 review pass. Deliberately uses vocabulary absent from the source passage (source says Apollo 'punished Marsyas by flaying him alive'; the question avoids 'punish', 'flay' and the name Marsyas itself)."
+    },
+    {
+      "id": "factual-14",
+      "question": "Why didn't Ceres ask Famine directly to inflict punishment on Erisichthon, and who was sent instead?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "056_ERISICHTHON.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Retargeted from the earlier draft: the previous version asked which 'goddess Ceres sent' to inflict the hunger, which mis-stated the source (Ceres sends an Oread to summon Famine). This version asks the two facts the passage actually gives -- the Fates forbid the two goddesses to meet, so an Oread carries the message."
+    },
+    {
+      "id": "factual-15",
+      "question": "What happened to Dido after unsuccessful attempts to convince Aeneas to stay with her?",
+      "stratum": "factual",
+      "relevance": {},
+      "source_document": "100_DIDO.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "synthesis-01",
+      "question": "Three different women in these myths are rooted to the spot and turned into plants, two of them through their connection to Apollo. Who are they and what plant did each become?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "005_APOLLO_AND_DAPHNE.md",
+      "notes": "Multi-hop: also draws on 028_CLYTIE.md, 018_DRYOPE.md. Paraphrased in the ticket #8 review pass; the earlier draft named the three plants (laurel, sunflower, lotus) and so answered its own second half. Re-narrowed with the Apollo connection so the intended triple (Daphne, Clytie, Dryope) stays determined without naming the outcomes."
+    },
+    {
+      "id": "synthesis-02",
+      "question": "Two beautiful young men transformed into plants, one from a fatal accident with a god, the other from their own self-obsession. Name both youths and the flower each became.",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "020_APOLLO_AND_HYACINTHUS.md",
+      "notes": "Multi-hop: also draws on 027_ECHO_AND_NARCISSUS.md. Paraphrased in the ticket #8 review pass (author wording)."
+    },
+    {
+      "id": "synthesis-03",
+      "question": "In two separate tales, a devoted spouse is fetched back from the realm of the dead — one attempt fails because the rescuer looks back too soon, the other succeeds because a visiting hero physically wrestles the spouse's life away from Death himself. Identify the couples in each case and how the outcomes differed.",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "071_ORPHEUS_AND_EURYDICE.md",
+      "notes": "Multi-hop: also draws on 068_ADMETUS_AND_ALCESTIS.md"
+    },
+    {
+      "id": "synthesis-04",
+      "question": "One demigod turns the giant Atlas to stone using a monster's severed head, while a later demigod briefly takes over Atlas's job of holding up the sky so the giant can run an errand for him. Who performs each of these two encounters with Atlas?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "034_PERSEUS_AND_ATLAS.md",
+      "notes": "Multi-hop: also draws on 047_HERCULES.md"
+    },
+    {
+      "id": "synthesis-05",
+      "question": "Two Greek heroes overcome a fearsome creature only because they are given a clever workaround for a fatal direct encounter — one avoids meeting a lethal gaze by watching a mirrored surface instead, the other is given a way to retrace an otherwise impossible path back out after the kill. Who are these two heroes, and what creature did each defeat?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "033_PERSEUS_AND_MEDUSA.md",
+      "notes": "Multi-hop: also draws on 049_THESEUS.md"
+    },
+    {
+      "id": "synthesis-06",
+      "question": "Two different women in mythology unleash disaster on the world simply by giving in to curiosity and opening a sealed container they had been warned not to touch. Who are they, what did each container hold, and what was the one thing that was not lost in either case?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "003_PROMETHEUS_AND_PANDORA.md",
+      "notes": "Multi-hop: also draws on 023_CUPID_AND_PSYCHE.md"
+    },
+    {
+      "id": "synthesis-07",
+      "question": "Two queens fall in love with a foreign hero who has just arrived by sea after fleeing his homeland, host him generously, and are then abandoned when he continues his journey. One dies by her own hand in despair; the other is comforted and ends up married to a god instead. Name both women and the heroes who left them.",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "100_DIDO.md",
+      "notes": "Multi-hop: also draws on 054_ARIADNE.md"
+    },
+    {
+      "id": "synthesis-08",
+      "question": "An enchantress aids a newcomer in carrying off a prized ram's pelt from her own father's realm, charming the fire-snorting oxen and lulling its scaled sentinel; years later, remarried in Athens, she schemes to poison a different newcomer who turns out to be her husband's long-lost heir. Identify the enchantress and the two men.",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "043_THE_GOLDEN_FLEECE.md",
+      "notes": "Multi-hop: also draws on 049_THESEUS.md. Paraphrased in the ticket #8 review pass; the two-hop chain (Golden Fleece theft -> the poisoning of Theseus) is preserved."
+    },
+    {
+      "id": "synthesis-09",
+      "question": "Two mortals receive punishment from a virgin huntress-goddess or her jealous rival, one for becoming pregnant with a god's child, the other for unluckily encountering a nude goddess. What became of each of them, and how deserving was the punishment received?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "009_CALLISTO.md",
+      "notes": "Multi-hop: also draws on 010_DIANA_AND_ACTAEON.md. Paraphrased in the ticket #8 review pass (author wording). The earlier draft stated both transformations ('changed into an animal her own son nearly kills', 'turned into a stag and torn apart by his own hounds'), which answered its own second half and duplicated factual-02's target fact. Now describes each offence instead, leaving both outcomes to be retrieved."
+    },
+    {
+      "id": "synthesis-10",
+      "question": "The god of the forge helps two different figures in moments of desperate need — guiding a blinded giant hunter to a cure for his sight, and later working through the night to build replacement battle-gear for a grieving warrior about to avenge a fallen friend. Who receives each of these two gifts from the smith-god?",
+      "stratum": "synthesis",
+      "relevance": {},
+      "source_document": "085_ORION.md",
+      "notes": "Multi-hop: also draws on 088_THE_TROJAN_WAR.md"
+    },
+    {
+      "id": "entity-01",
+      "question": "What or who carries the distraught Psyche from the cliff to a nice botanical landing spot?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "023_CUPID_AND_PSYCHE.md",
+      "notes": "Rewritten from an earlier draft to avoid overlapping factual-03, which already covers the seed-sorting task; this question targets a different fact (the mountain rescue by Zephyr) from the same source file. Paraphrased again in the ticket #8 review pass (author wording). The earlier draft asked 'which west wind', which handed over Zephyr's defining attribute; 'what or who' keeps both readings open."
+    },
+    {
+      "id": "entity-02",
+      "question": "Who equipped Perseus with the buckler and footwear enabling him to withstand Medusa?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "033_PERSEUS_AND_MEDUSA.md",
+      "notes": "Rewritten from an earlier draft to avoid overlapping factual-05, which already covers Minerva's transformation of Medusa; this question targets a different fact (who equipped Perseus) from the same source file. Paraphrased again in the ticket #8 review pass (author wording, 'a shield'->'the buckler' to clear the containment threshold). The earlier draft described the mirror-shield and winged shoes, which supplied the distinguishing detail the question was asking for."
+    },
+    {
+      "id": "entity-03",
+      "question": "What ocean-going emblem of authority did Neptune carry, and what natural forces could he command with it?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "059_NEPTUNE.md",
+      "notes": "Deliberately substitutes vocabulary absent from the source: 'ocean,' 'emblem,' and 'authority' do not appear in 059_NEPTUNE.md, which instead uses 'sea,' 'symbol,' and 'power.'"
+    },
+    {
+      "id": "entity-04",
+      "question": "What effect did Orpheus's music have on nature, animals, and other people?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "071_ORPHEUS_AND_EURYDICE.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "entity-05",
+      "question": "By what clever scheme did Dido obtain enough land from the local inhabitants to found her new city?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "100_DIDO.md"
+    },
+    {
+      "id": "entity-06",
+      "question": "What became of the gifted weaver Arachne after she claimed her craftsmanship equaled a goddess's?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "030_MINERVA.md",
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). The earlier draft asked how her fate 'accounts for a common eight-legged arachnid', which gave the spider away via Arachne's own name; the transformation is now the thing to retrieve."
+    },
+    {
+      "id": "entity-07",
+      "question": "How did Daedalus break free from his place of captivity when travel by sea was blocked to him?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "051_DAEDALUS.md"
+    },
+    {
+      "id": "entity-08",
+      "question": "What incentive did Calypso give to Ulysses to entice him to stay?",
+      "stratum": "entity",
+      "relevance": {},
+      "source_document": "096_CALYPSO.md",
+      "notes": "Paraphrased in the ticket #8 review pass to reduce lexical overlap with the source passage."
+    },
+    {
+      "id": "unanswerable-01",
+      "question": "What was the name of the sword that could only be drawn from the stone by the one true king, and who was the wizard who guided him to the throne?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'excalibur|sword in the stone|sword.{0,15}stone|camelot|round table', 'merlin|guinevere|lancelot|\\barthur\\b|avalon', and 'rightful king|drawn.{0,20}sword|prove.{0,15}kingship|test.{0,15}kingship|worthy.{0,10}king' across lore_chunks/*.md — zero matches for all. Tradition: Arthurian legend. Index check (dense, k=5) top hits: 150_OF_LOKI_AND_HIS_PROGENY.md (0.619); 153_THE_DEATH_OF_BALDUR.md (0.602); 162_BEOWULF.md (0.600); 153_THE_DEATH_OF_BALDUR.md (0.589); 073_AMPHION.md (0.588). Verdict: No returned passage names Excalibur, a sword-in-stone trial, or Merlin; top hits are Norse (Loki, Baldur) and Beowulf material sharing only generic 'sword/king/hero' vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-02",
+      "question": "In the legend of the Round Table, what quest did the knights undertake to find the cup used at the Last Supper?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'round table|holy grail|grail|last supper|knights.{0,15}quest' across lore_chunks/*.md — zero matches. Tradition: Arthurian legend (Grail Quest). Index check (dense, k=5) top hits: 048_HEBE_AND_GANYMEDE.md (0.653); 052_CASTOR_AND_POLLUX.md (0.632); 089_THE_FALL_OF_TROY.md (0.612); 093_RETURN_OF_ULYSSES.md (0.605); 098_FATE_OF_THE_SUITORS.md (0.603). Verdict: No returned passage mentions a quest, a cup, or the Last Supper; top hits are unrelated Greek myth and Homeric episodes matching only on 'knights/quest'-adjacent heroic vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-03",
+      "question": "Which sorceress, half-sister to the king, was raised by nine otherworldly maidens and later took the dying king to a mystical isle to heal his wounds?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'morgan le fay|morgan.{0,10}fay|avalon|nine maidens|isle.{0,15}heal' across lore_chunks/*.md — zero matches. Tradition: Arthurian legend (Morgan le Fay / Avalon). Index check (dense, k=5) top hits: 153_THE_DEATH_OF_BALDUR.md (0.610); 094_THE_LAESTRYGONIANS.md (0.606); 088_THE_TROJAN_WAR.md (0.601); 029_HERO_AND_LEANDER.md (0.601); 001_INTRODUCTION.md (0.596). Verdict: No returned passage describes a sorceress raised by nine maidens or a healing isle; top hits are Norse (Baldur's death) and Odyssey material sharing only 'king/isle/dying' vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-04",
+      "question": "What herculean hero of ancient Uruk, two-thirds divine and one-third mortal, befriended a wild man created by the gods and together they slew a monstrous guardian of the cedar forest?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'gilgamesh|enkidu|epic of gilgamesh|plant of immortality|utnapishtim' and 'uruk|cedar forest|humbaba' across lore_chunks/*.md — zero matches. Two incidental 'Babylon(ian)' hits (006, 012) are geographic, not mythological. Tradition: Mesopotamian mythology (Gilgamesh). Index check (dense, k=5) top hits: 150_OF_LOKI_AND_HIS_PROGENY.md (0.625); 001_INTRODUCTION.md (0.616); 149_OF_THOR_AND_THE_OTHER_GODS.md (0.608); 056_ERISICHTHON.md (0.600); 037_AND_PYGMIES.md (0.591). Verdict: No returned passage names Gilgamesh, Enkidu, Uruk, or a cedar forest; top hits are Norse (Loki, Thor) and the Introduction chapter sharing only generic 'hero/monster/divine' vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-05",
+      "question": "Which goddess of love and war descended through seven gates into the underworld to confront her sister, the queen of the dead, being stripped of one garment or jewel at each gate?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'ishtar|marduk|tiamat|inanna|sumer|babylon|akkad' and 'seven gates|stripped.{0,20}gate|gate.{0,20}garment|queen of the underworld' — zero matches. Checked 015_PROSERPINE_GLAUCUS_AND_SCYLLA.md directly (the corpus's own underworld-descent story) for the gate-stripping motif — absent there too. Tradition: Mesopotamian mythology (Inanna/Ishtar), deliberately near-miss against the corpus's own Proserpine story. Index check (dense, k=5) top hits: 031_NIOBE.md (0.579); 030_MINERVA.md (0.567); 044_MEDEA_AND_AESON.md (0.559); 033_PERSEUS_AND_MEDUSA.md (0.557); 088_THE_TROJAN_WAR.md (0.554). Verdict: No returned passage describes seven gates or a sister-queen of the dead; top hits (Niobe, Minerva, Medea, Perseus/Medusa) share only thematic 'goddess/underworld/loss' vocabulary. Notably the corpus's own underworld-descent story (Proserpine, 015) is NOT in the top-5, confirming the gate-stripping motif is genuinely absent even from the closest in-corpus analog. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-06",
+      "question": "According to this mythology, which feathered serpent deity, god of wind and learning, was prophesied to return from the east and was mistaken by an emperor for a returning god?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'quetzalcoatl|feathered serpent|aztec|maya\\b|mayan|tenochtitlan|tezcatlipoca' — zero matches. Tradition: Mesoamerican mythology (Quetzalcoatl). Index check (dense, k=5) top hits: 120_ORACLE_OF_AESCULAPIUS.md (0.612); 067_ACHELOUS_AND_HERCULES.md (0.597); 024_CADMUS_THE_MYRMIDONS.md (0.596); 058_THE_WATER_DEITIES.md (0.594); 066_THE_WINDS.md (0.591). Verdict: No returned passage names Quetzalcoatl or a feathered serpent; top hits are oracle and wind-deity material sharing only 'prophecy/deity/return' vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-07",
+      "question": "In which mythology do a pair of twin brothers outwit the lords of the underworld in a sacred ball game, avenging their father and eventually ascending to become the sun and moon?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'ballgame|ball game|lords of death|hero twins|xibalba|popol vuh' — zero matches. Tradition: Mesoamerican mythology (Popol Vuh / Hero Twins), deliberately near-miss against the corpus's own sun/moon deity material for other traditions. Index check (dense, k=5) top hits: 148_THE_VALKYRIOR.md (0.616); 149_OF_THOR_AND_THE_OTHER_GODS.md (0.596); 156_RAGNAROK_THE_TWILIGHT_OF_THE_GODS.md (0.596); 150_OF_LOKI_AND_HIS_PROGENY.md (0.595); 012_PHAETON.md (0.590). Verdict: No returned passage describes a ball game, underworld lords, or twins becoming sun and moon; top hits are Norse (Valkyries, Thor, Ragnarok) sharing only 'twilight of the gods'-adjacent mythic vocabulary. Does not answer the question."
+    },
+    {
+      "id": "unanswerable-08",
+      "question": "Which storm god, banished from the heavens for his unruliness, slew an eight-headed, eight-tailed serpent by getting it drunk on rice wine, and found a legendary sword hidden in one of its tails?",
+      "stratum": "unanswerable",
+      "relevance": {},
+      "notes": "Verified absent by both grep and the built dense index. Grep grepped 'amaterasu|shinto|susanoo|izanagi|izanami|sun goddess' and 'eight-headed|eight headed|multi-headed serpent|storm god.{0,20}serpent' — zero matches. Checked against the corpus's own multi-headed-serpent story (047_HERCULES.md's Hydra: nine heads, no storm god, no drunkenness, no sword-in-tail) to confirm this is a distinct, non-answering story. Tradition: Japanese/Shinto mythology (Susanoo vs. Yamata-no-Orochi), deliberately near-miss against the corpus's own Hydra labor. Index check (dense, k=5) top hits: 077_MELAMPUS.md (0.616); 120_ORACLE_OF_AESCULAPIUS.md (0.608); 067_ACHELOUS_AND_HERCULES.md (0.606); 048_HEBE_AND_GANYMEDE.md (0.591); 048_HEBE_AND_GANYMEDE.md (0.591). Verdict: No returned passage describes an eight-headed serpent, rice wine, or a sword hidden in a tail; top hit (067_ACHELOUS_AND_HERCULES.md, score 0.6156) is a genuine near-miss — Achelous is a shapeshifting river-god (serpent/bull forms) defeated by Hercules, but the fight is over Deianira with no drunkenness, no eight heads, no hidden sword. Manually confirmed by reading the passage. Does not answer the question."
+    }
+  ],
+  "document_coverage": {
+    "distinct_source_documents": 22,
+    "corpus_size": 164,
+    "fraction": 0.1341
+  },
+  "notes": "Unanswerable questions were drawn from traditions verified absent from the corpus (Arthurian, Mesopotamian, Mesoamerican, Japanese/Shinto). Norse and Egyptian mythology, named as example \"outside\" traditions in the spec, are in fact covered by this corpus (lore_chunks/138-144, 146-156 Hindu/Norse; 116-117 Egyptian) and were excluded from candidate traditions on that basis. Absence for all 8 unanswerable questions was verified two ways: grep across lore_chunks/*.md, and a live query against the built dense index (k=5) confirming no returned passage answers the question, recorded per-question in notes. The paraphrase review pass is complete: all 15 in-corpus questions flagged at containment >=0.50 by .scratch/rag-evaluation-harness/containment_check.py were hand-edited and re-scored below that threshold, verified still answerable from their source_document against the same target fact. Unanswerable questions were left untouched, because their notes record dense-index top-5 hits computed for those exact question strings and rewording would invalidate that verification."
+}
