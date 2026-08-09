@@ -22,11 +22,11 @@
     },
     {
       "id": "factual-02",
-      "question": "After a hunter stumbled upon her bathing, into what creature did the goddess Diana shapeshift him so that his own hounds would kill him?",
+      "question": "After a hunter stumbled upon her bathing, what did Diana do to him that would cause his own dogs to kill him?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "010_DIANA_AND_ACTAEON.md",
-      "notes": "deliberately uses vocabulary absent from source passage (source describes stag features growing on Actaeon without using the word 'shapeshift')"
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Deliberately uses vocabulary absent from the source passage (source describes stag features growing on Actaeon without naming the creature as the answer); the earlier draft asked 'into what creature', which narrowed the answer to a hunted animal."
     },
     {
       "id": "factual-03",
@@ -38,11 +38,11 @@
     },
     {
       "id": "factual-04",
-      "question": "What lasting restriction did Juno place on the nymph Echo's speech as punishment for distracting her?",
+      "question": "What was the offense of Echo that led Juno to punish her so severely?",
       "stratum": "factual",
       "relevance": {},
       "source_document": "027_ECHO_AND_NARCISSUS.md",
-      "notes": "deliberately uses vocabulary absent from source passage (source has Juno 'pass sentence' and take away Echo's ability to speak first; it never uses the words 'restriction' or 'punishment')"
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). Retargeted: the earlier draft asked what 'restriction on speech' Juno imposed and stated the offence; this version asks for the offence and leaves the sentence to be retrieved."
     },
     {
       "id": "factual-05",
@@ -133,19 +133,19 @@
     },
     {
       "id": "synthesis-01",
-      "question": "Three different women in these myths end up rooted to the ground and turned into plants after a moment of grief or guilt tied to Apollo's world — one becomes a laurel, one a sunflower, and one a lotus shrub. Who are they and what plant did each become?",
+      "question": "Three different women are transformed into some type of tree, shrub, or flower. Who are they and what plant did each become?",
       "stratum": "synthesis",
       "relevance": {},
       "source_document": "005_APOLLO_AND_DAPHNE.md",
-      "notes": "Multi-hop: also draws on 028_CLYTIE.md, 018_DRYOPE.md"
+      "notes": "Multi-hop: also draws on 028_CLYTIE.md, 018_DRYOPE.md. Paraphrased in the ticket #8 review pass (author wording); the earlier draft named the three plants (laurel, sunflower, lotus) and so answered its own second half. NOTE FOR LABELLING: dropping the named plants also dropped the only constraint selecting these three women specifically -- the corpus contains other plant transformations, so the intended triple (Daphne, Clytie, Dryope) is no longer uniquely determined by the question text. Decide at the labelling sitting whether to accept any valid triple or to re-narrow the question."
     },
     {
       "id": "synthesis-02",
-      "question": "Two beautiful young men in these stories die and are commemorated by having a flower spring from the site of their death — one from a fatal accident during a game with a god, the other from wasting away over his own reflection. Name both youths and the flower each became.",
+      "question": "Two beautiful young men transformed into plants, one from a fatal accident with a god, the other from their own self-obsession. Name both youths and the flower each became.",
       "stratum": "synthesis",
       "relevance": {},
       "source_document": "020_APOLLO_AND_HYACINTHUS.md",
-      "notes": "Multi-hop: also draws on 027_ECHO_AND_NARCISSUS.md"
+      "notes": "Multi-hop: also draws on 027_ECHO_AND_NARCISSUS.md. Paraphrased in the ticket #8 review pass (author wording)."
     },
     {
       "id": "synthesis-03",
@@ -221,11 +221,11 @@
     },
     {
       "id": "entity-02",
-      "question": "Which two divine allies equipped Perseus with a mirror-like shield and winged footwear so he could approach Medusa without meeting her gaze directly?",
+      "question": "Who equipped Perseus with the buckler and footwear enabling him to withstand Medusa?",
       "stratum": "entity",
       "relevance": {},
       "source_document": "033_PERSEUS_AND_MEDUSA.md",
-      "notes": "Rewritten from an earlier draft to avoid overlapping factual-05, which already covers Minerva's transformation of Medusa; this question targets a different fact (who equipped Perseus) from the same source file."
+      "notes": "Rewritten from an earlier draft to avoid overlapping factual-05, which already covers Minerva's transformation of Medusa; this question targets a different fact (who equipped Perseus) from the same source file. Paraphrased again in the ticket #8 review pass (author wording, 'a shield'->'the buckler' to clear the containment threshold). The earlier draft described the mirror-shield and winged shoes, which supplied the distinguishing detail the question was asking for."
     },
     {
       "id": "entity-03",
@@ -252,11 +252,11 @@
     },
     {
       "id": "entity-06",
-      "question": "What became of the gifted weaver Arachne after she claimed her craftsmanship equaled a goddess's, and how does her fate account for a common eight-legged arachnid?",
+      "question": "What became of the gifted weaver Arachne after she claimed her craftsmanship equaled a goddess's?",
       "stratum": "entity",
       "relevance": {},
       "source_document": "030_MINERVA.md",
-      "notes": "Deliberately substitutes vocabulary absent from the source: 'arachnid,' 'craftsmanship,' and 'eight-legged' do not appear in 030_MINERVA.md, which describes the transformation without naming the creature type explicitly this way."
+      "notes": "Paraphrased in the ticket #8 review pass (author wording). The earlier draft asked how her fate 'accounts for a common eight-legged arachnid', which gave the spider away via Arachne's own name; the transformation is now the thing to retrieve."
     },
     {
       "id": "entity-07",
