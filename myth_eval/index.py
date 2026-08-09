@@ -244,32 +244,25 @@ def build_index(
 
     target.mkdir(parents=True, exist_ok=True)
 
-    # RAGSystem resolves "chroma_db" and its lore cache relative to the process
-    # working directory. Pinning the working directory for the duration of the
-    # build is what makes the store land predictably without modifying
-    # RAGSystem itself.
-    previous_cwd = Path.cwd()
     stale_key_path = target / KEY_FILENAME
     if stale_key_path.exists():
         # Remove first: if the build fails part-way, a stale key must not be
         # left claiming the half-built index is current.
         stale_key_path.unlink()
 
-    try:
-        os.chdir(repository_root())
-        from rag_system import RAGSystem  # noqa: PLC0415 — deliberately deferred
+    from rag_system import RAGSystem  # noqa: PLC0415 — deliberately deferred
 
-        system = RAGSystem(
-            lore_chunks_dir=str(corpus_dir()),
-            embedding_model_name=embedding_model,
-            collection_name=collection_name,
-            chunk_size_chars=chunk_size_chars,
-            chunk_overlap_chars=chunk_overlap_chars,
-            force_reindex=True,
-        )
-        chunk_count = len(getattr(system, "lore_chunks", []) or [])
-    finally:
-        os.chdir(previous_cwd)
+    # The store location is stated, not inferred from the working directory.
+    system = RAGSystem(
+        lore_chunks_dir=str(corpus_dir()),
+        embedding_model_name=embedding_model,
+        collection_name=collection_name,
+        chunk_size_chars=chunk_size_chars,
+        chunk_overlap_chars=chunk_overlap_chars,
+        force_reindex=True,
+        store_dir=str(target),
+    )
+    chunk_count = len(getattr(system, "lore_chunks", []) or [])
 
     write_index_key(key, target)
     logger.info("Built index at %s (%s), %d chunks", target, key.fingerprint(), chunk_count)
