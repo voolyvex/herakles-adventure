@@ -32,6 +32,7 @@ from myth_eval.metrics import (
     recall_at_k,
     unanswerable_precision,
 )
+from myth_eval.pool import POOL_DEPTH, ArmRetrievals
 from myth_eval.retrieval import RetrievedItem, Retriever
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "K_VALUES",
     "GATE_K",
-    "POOL_DEPTH",
     "QuestionOutcome",
     "ArmResult",
     "EvaluationResults",
@@ -52,7 +52,6 @@ __all__ = [
 # them as the gating figure.
 K_VALUES = (3, 5, 10)
 GATE_K = 5
-POOL_DEPTH = 10
 
 # Per-stratum figures are reported with this marker attached, so a reader cannot
 # mistake a diagnostic for a gate.
@@ -68,16 +67,18 @@ def default_results_path() -> Path:
 
 @dataclass
 class QuestionOutcome:
-    """One arm's scored result for one question. Retained for pooling.
+    """One arm's scored result for one question.
 
-    ``items`` keeps the retrieved passages themselves, not just their source
-    documents, because the candidate pool a human grades has to show the text
-    that was actually retrieved — a filename alone is not something anyone can
-    assign a relevance grade to. Retaining them here means pooling reads one
-    evaluation pass rather than paying for a second round of retrieval.
+    Scoring reads ``documents`` and ``scores``; ``retrieved_for_pooling`` is
+    named for what it is — a handover, not part of the score. Pooling is its
+    only reader, and it holds whole passages rather than filenames because a
+    human grading a candidate needs the text, which a filename cannot supply.
+    Carrying it through the run is what lets a pool be built from one
+    evaluation pass instead of a second round of retrieval.
 
-    They are held in memory only: ``ArmResult.to_dict`` does not serialise
-    outcomes, so the results file stays a compact metrics artefact.
+    Held in memory only: ``ArmResult.to_dict`` does not serialise outcomes, so
+    the results file stays a compact metrics artefact and the handover never
+    reaches it.
     """
 
     question_id: str
@@ -86,7 +87,7 @@ class QuestionOutcome:
     scores: List[float]
     latency_seconds: float
     metrics: Dict[str, float] = field(default_factory=dict)
-    items: List[RetrievedItem] = field(default_factory=list)
+    retrieved_for_pooling: List[RetrievedItem] = field(default_factory=list)
 
 
 @dataclass
@@ -141,6 +142,24 @@ class EvaluationResults:
         """Which configuration wins on the gating metric."""
         scores = self.aggregate_gate_scores()
         return max(scores, key=scores.get) if scores else None
+
+    def retrievals_for_pooling(self) -> List[ArmRetrievals]:
+        """This run's retrieved passages, in the shape pooling takes.
+
+        The handover ``QuestionOutcome.retrieved_for_pooling`` exists for.
+        Building a pool from this reads the pass that has already happened,
+        rather than paying for a second round of retrieval.
+        """
+        return [
+            ArmRetrievals(
+                name=arm.name,
+                retrievals={
+                    o.question_id: list(o.retrieved_for_pooling)
+                    for o in arm.outcomes
+                },
+            )
+            for arm in self.arms
+        ]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -221,13 +240,14 @@ def evaluate_arm(
     Args:
         retriever: Anything implementing the retrieval protocol.
         dataset: The question set.
-        k: Retrieval depth. Defaults to the pooling depth so that metrics at
-            every K value are computable from one pass.
+        k: Retrieval depth. Defaults to :data:`~myth_eval.pool.POOL_DEPTH`, so
+            that metrics at every K value and a full-depth pool are all
+            computable from one pass.
         filters_for: Optional per-question filter, used by the god_context arm.
 
     Returns:
         The arm's aggregate metrics, latency percentiles, per-stratum
-        breakdowns and retained per-question outcomes.
+        breakdowns and per-question outcomes.
     """
     outcomes: List[QuestionOutcome] = []
     latencies: List[float] = []
@@ -251,7 +271,7 @@ def evaluate_arm(
                 scores=scores,
                 latency_seconds=elapsed,
                 metrics=_score_question(question, documents, scores),
-                items=list(items),
+                retrieved_for_pooling=list(items),
             )
         )
 
