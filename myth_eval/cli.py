@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
 from myth_eval.dataset import Dataset, default_dataset_path
+from myth_eval.pool import build_pool, default_pool_path
 from myth_eval.runner import (
     POOL_DEPTH,
     EvaluationResults,
@@ -189,8 +190,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"\nResults written to {written}")
 
     if args.pool_output is not None:
-        from myth_eval.pool import build_pool, default_pool_path
-
         # The spec fixes the pooling depth at 10. A deeper retrieval run must
         # not widen the pool past it, so --k can only ever pool shallower.
         pool = build_pool(results.arms, dataset, depth=min(args.k, POOL_DEPTH))

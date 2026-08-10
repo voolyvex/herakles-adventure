@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from myth_eval.dataset import GRADE_LABELS, Dataset, Question
-from myth_eval.runner import POOL_DEPTH, ArmResult
+from myth_eval.runner import POOL_DEPTH, ArmResult, QuestionOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -255,19 +255,33 @@ class CandidatePool:
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def _outcomes_by_question(
-    arms: Sequence[ArmResult],
-) -> List[tuple]:
+@dataclass
+class _IndexedArm:
+    """One arm's outcomes keyed by question id.
+
+    Internal. It exists so pooling looks each question up once per arm rather
+    than scanning that arm's whole outcome list per question — and so the
+    signatures below can say what they carry.
+    """
+
+    name: str
+    outcomes: Dict[str, QuestionOutcome]
+
+
+def _outcomes_by_question(arms: Sequence[ArmResult]) -> List[_IndexedArm]:
     """Index each arm's outcomes by question id, once for the whole run."""
     return [
-        (arm.name, {outcome.question_id: outcome for outcome in arm.outcomes})
+        _IndexedArm(
+            name=arm.name,
+            outcomes={outcome.question_id: outcome for outcome in arm.outcomes},
+        )
         for arm in arms
     ]
 
 
 def _pool_one_question(
     question: Question,
-    indexed_arms: Sequence[tuple],
+    indexed_arms: Sequence[_IndexedArm],
     depth: int,
 ) -> QuestionPool:
     """Union one question's results across arms, deduplicated by document.
@@ -279,8 +293,8 @@ def _pool_one_question(
     """
     merged: Dict[str, PooledCandidate] = {}
 
-    for arm_name, outcomes in indexed_arms:
-        outcome = outcomes.get(question.id)
+    for arm in indexed_arms:
+        outcome = arm.outcomes.get(question.id)
         if outcome is None:
             continue
 
@@ -299,12 +313,12 @@ def _pool_one_question(
                     excerpt=_excerpt(item.text),
                     chunk_id=item.chunk_id,
                     best_rank=item.rank,
-                    found_by=[arm_name],
+                    found_by=[arm.name],
                 )
                 continue
 
-            if arm_name not in existing.found_by:
-                existing.found_by.append(arm_name)
+            if arm.name not in existing.found_by:
+                existing.found_by.append(arm.name)
             # A better-ranked chunk of the same document replaces the window,
             # so the excerpt shown is the strongest passage found. Chunk id
             # breaks a rank tie, making the choice total: without it, two arms

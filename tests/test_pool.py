@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import logging
 
-from myth_eval.dataset import Dataset, Question, Stratum
+from myth_eval.cli import main
+from myth_eval.dataset import Dataset, Question, Stratum, default_dataset_path
 from myth_eval.fakes import FakeRetriever
 from myth_eval.pool import (
     EXCERPT_CHARS,
@@ -23,6 +24,7 @@ from myth_eval.pool import (
     build_pool,
     default_pool_path,
 )
+from myth_eval.retrieval import RetrievedItem
 from myth_eval.runner import POOL_DEPTH, evaluate_arm
 
 
@@ -223,8 +225,6 @@ class TestShapedForGrading:
         dataset = make_dataset(question)
         # A chunk longer than the window, built directly through the protocol
         # type: the fake's own passages are short by construction.
-        from myth_eval.retrieval import RetrievedItem
-
         arm = evaluate_arm(FakeRetriever("dense"), dataset)
         arm.outcomes[0].items = [
             RetrievedItem(
@@ -410,8 +410,6 @@ class TestPoolDepth:
 
     def test_a_deeper_retrieval_run_does_not_widen_the_pool(self, tmp_path):
         """--k sets retrieval depth; it must not push the pool past ten."""
-        from myth_eval.cli import main
-
         question = factual()
         dataset = make_dataset(question)
         # Labelled, because build_fake_arms scripts its responses from the
@@ -444,8 +442,6 @@ class TestPoolDepth:
         self, tmp_path, caplog
     ):
         """--k below the pooling depth is allowed through, but not quietly."""
-        from myth_eval.cli import main
-
         question = factual()
         dataset = make_dataset(question)
         question.relevance = {f"doc{i:02d}.md": 2 for i in range(15)}
@@ -554,7 +550,7 @@ class TestPersistence:
 
     def test_the_default_path_sits_beside_the_dataset(self):
         assert default_pool_path().name == "candidate_pool.json"
-        assert default_pool_path().parent.name == "eval_data"
+        assert default_pool_path().parent == default_dataset_path().parent
 
     def test_the_summary_counts_what_the_sitting_will_cost(self, tmp_path):
         one, two = factual("factual-01"), factual("factual-02", "Another question?")
