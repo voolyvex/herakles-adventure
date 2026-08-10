@@ -394,8 +394,8 @@ class TestPoolDepth:
         with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
             build_pool(arms, dataset, depth=3)
 
-        assert "3" in caplog.text
-        assert str(POOL_DEPTH) in caplog.text
+        assert "depth 3," in caplog.text
+        assert f"pooling depth of {POOL_DEPTH}" in caplog.text
 
     def test_pooling_at_the_full_depth_says_nothing(self, caplog):
         """The warning has to stay rare, or it stops being read."""
@@ -468,7 +468,7 @@ class TestPoolDepth:
         assert exit_code == 0
         assert emitted["provenance"]["pool_depth"] == 3
         assert len(emitted["questions"][0]["candidates"]) == 3
-        assert "3" in caplog.text
+        assert "depth 3," in caplog.text
 
 
 class TestReproducibility:

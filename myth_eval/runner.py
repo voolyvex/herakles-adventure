@@ -40,6 +40,7 @@ __all__ = [
     "K_VALUES",
     "GATE_K",
     "POOL_DEPTH",
+    "QuestionOutcome",
     "ArmResult",
     "EvaluationResults",
     "evaluate_arm",
