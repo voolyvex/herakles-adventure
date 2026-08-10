@@ -30,9 +30,17 @@ __all__ = [
     "RerankedArm",
     "build_arms",
     "ARM_NAMES",
+    "DENSE",
+    "SPARSE",
+    "HYBRID",
+    "HYBRID_RERANK",
 ]
 
+# The canonical reporting order, and the single source of every arm name. The
+# four below are unpacked from it rather than written out again, so the arms
+# this module builds cannot drift from the tuple that names them.
 ARM_NAMES = ("dense", "sparse", "hybrid", "hybrid_rerank")
+DENSE, SPARSE, HYBRID, HYBRID_RERANK = ARM_NAMES
 
 # Candidate fan-out per sub-arm before fusion. Mirrors the orchestrator's
 # hard-coded 40. Parameterising the orchestrator's own pools is out of scope
@@ -80,7 +88,7 @@ class HybridArm:
         self,
         dense: Retriever,
         sparse: Optional[Retriever],
-        name: str = "hybrid",
+        name: str = HYBRID,
         fanout: int = FANOUT,
     ) -> None:
         self._dense = dense
@@ -124,7 +132,7 @@ class RerankedArm:
         self,
         hybrid: HybridArm,
         reranker: Any,
-        name: str = "hybrid_rerank",
+        name: str = HYBRID_RERANK,
         pool_size: int = RERANK_POOL,
     ) -> None:
         self._hybrid = hybrid

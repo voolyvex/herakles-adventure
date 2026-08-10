@@ -26,13 +26,14 @@ dataset.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 __all__ = [
     "RetrievedItem",
     "Retriever",
     "DenseRetrieverAdapter",
     "SparseRetrieverAdapter",
+    "adapt_stack",
     "normalise_hit",
 ]
 
@@ -236,3 +237,43 @@ class SparseRetrieverAdapter:
     ) -> List[RetrievedItem]:
         hits = self._agent.retrieve(self._tokenize(query), k, filters)
         return normalise_hits(hits or [], k)
+
+
+def adapt_stack(
+    stack: Any,
+    with_reranker: bool = True,
+) -> Tuple[Retriever, Retriever, Optional[Any]]:
+    """Put a retrieval stack's three agents behind the protocol.
+
+    ``stack`` is anything exposing ``dense``, ``sparse`` and ``reranker`` —
+    which is the whole of what the harness ever wanted from ``RAGSystem``.
+    Taking the duck type rather than the concrete class is what keeps this
+    function, and the refusal below, reachable without torch or chromadb.
+
+    Args:
+        stack: An object with ``dense``, ``sparse`` and ``reranker`` attributes.
+        with_reranker: Whether to carry the reranker through. False drops the
+            reranked arm, which is faster when iterating.
+
+    Returns:
+        The dense adapter, the sparse adapter, and the reranker or None.
+
+    Raises:
+        RuntimeError: If the stack's sparse retriever is absent. ``RAGSystem``
+            swallows a tokeniser failure into a warning, so the sparse agent
+            going missing is silent at its source; refusing here is what stops
+            a run scoring the sparse and hybrid arms zero for reasons that have
+            nothing to do with retrieval quality.
+    """
+    sparse_agent = getattr(stack, "sparse", None)
+    if sparse_agent is None:
+        raise RuntimeError(
+            "The sparse retriever failed to initialise, so the sparse and "
+            "hybrid arms cannot be measured. Refusing to produce results that "
+            "would silently score them zero."
+        )
+
+    dense = DenseRetrieverAdapter(stack.dense)
+    sparse = SparseRetrieverAdapter(sparse_agent)
+    reranker = getattr(stack, "reranker", None) if with_reranker else None
+    return dense, sparse, reranker

@@ -11,9 +11,10 @@ import json
 
 import pytest
 
-from myth_eval.arms import HybridArm, RerankedArm, build_arms
+from myth_eval.arms import ARM_NAMES, HybridArm, RerankedArm, build_arms
 from myth_eval.dataset import Dataset, Question, Stratum
 from myth_eval.fakes import FakeRetriever
+from myth_eval.retrieval import adapt_stack
 from myth_eval.runner import (
     GATE_K,
     K_VALUES,
@@ -101,17 +102,12 @@ class TestTheRunnerVisitsEveryArm:
 
     def test_the_four_arm_matrix_runs(self, dataset):
         """dense, sparse, hybrid, hybrid_rerank — the arms this ticket covers."""
-        arms = [FakeRetriever(name) for name in ("dense", "sparse", "hybrid", "hybrid_rerank")]
+        arms = [FakeRetriever(name) for name in ARM_NAMES]
 
         results = run_evaluation(arms, dataset)
 
         assert len(results.arms) == 4
-        assert [a.name for a in results.arms] == [
-            "dense",
-            "sparse",
-            "hybrid",
-            "hybrid_rerank",
-        ]
+        assert [a.name for a in results.arms] == list(ARM_NAMES)
 
 
 class TestReportedMetrics:
@@ -383,12 +379,95 @@ class TestBuildArms:
             FakeRetriever("dense"), FakeRetriever("sparse"), FakeReranker()
         )
 
-        assert [a.name for a in arms] == ["dense", "sparse", "hybrid", "hybrid_rerank"]
+        assert [a.name for a in arms] == list(ARM_NAMES)
 
     def test_sparse_absence_drops_that_arm_rather_than_failing(self):
         arms = build_arms(FakeRetriever("dense"), None, None)
 
         assert [a.name for a in arms] == ["dense", "hybrid"]
+
+
+class TestBothPathsShareOneAssembly:
+    """The claim ``--fake`` makes: identical code path, assembly included."""
+
+    def test_the_scripted_matrix_is_assembled_by_build_arms(self, dataset):
+        """Same names, same types, same order as the live matrix would give.
+
+        The scripted path used to hand-write these four arms, agreeing with
+        ``build_arms`` only because the same literals appeared in both places.
+        """
+        from myth_eval.cli import build_fake_arms
+
+        arms = build_fake_arms(dataset)
+
+        assert [arm.name for arm in arms] == list(ARM_NAMES)
+        assert isinstance(arms[2], HybridArm)
+        assert isinstance(arms[3], RerankedArm)
+
+    def test_the_scripted_matrix_still_retrieves(self, dataset):
+        """Assembly changed; behaviour did not."""
+        from myth_eval.cli import build_fake_arms
+
+        results = run_evaluation(build_fake_arms(dataset), dataset)
+
+        assert [arm.name for arm in results.arms] == list(ARM_NAMES)
+
+
+class TestAdaptingARetrievalStack:
+    """The adapter seam the live command sits on, exercised without the stack.
+
+    ``adapt_stack`` takes anything exposing ``dense``, ``sparse`` and
+    ``reranker``, which is all the command ever needed from ``RAGSystem``. That
+    is what puts the refusal below within reach of a test that loads no models.
+    """
+
+    class Stack:
+        def __init__(self, dense=None, sparse=None, reranker=None):
+            self.dense = dense
+            self.sparse = sparse
+            self.reranker = reranker
+
+    def test_it_refuses_when_the_sparse_retriever_failed_to_initialise(self):
+        """The harness's loudest safety behaviour, finally executed.
+
+        Silently dropping sparse here would score the sparse and hybrid arms
+        zero for reasons unrelated to retrieval quality, and that number would
+        land in the committed baseline. Refusing is the whole point.
+        """
+        stack = self.Stack(dense=object(), sparse=None, reranker=object())
+
+        with pytest.raises(RuntimeError) as raised:
+            adapt_stack(stack)
+
+        assert "sparse" in str(raised.value).lower()
+
+    def test_the_refusal_reports_nothing_rather_than_zeros(self):
+        """No partial matrix escapes: the caller gets an exception, not arms."""
+        stack = self.Stack(dense=object(), sparse=None, reranker=object())
+
+        try:
+            adapted = adapt_stack(stack)
+        except RuntimeError:
+            adapted = None
+
+        assert adapted is None
+
+    def test_a_whole_stack_adapts_to_the_protocol(self):
+        reranker = object()
+        stack = self.Stack(dense=object(), sparse=object(), reranker=reranker)
+
+        dense, sparse, adapted_reranker = adapt_stack(stack)
+
+        assert (dense.name, sparse.name) == ("dense", "sparse")
+        assert adapted_reranker is reranker
+
+    def test_dropping_the_reranker_leaves_the_other_two_adapted(self):
+        stack = self.Stack(dense=object(), sparse=object(), reranker=object())
+
+        dense, sparse, reranker = adapt_stack(stack, with_reranker=False)
+
+        assert reranker is None
+        assert (dense.name, sparse.name) == ("dense", "sparse")
 
 
 class TestNoHeavyDependencies:
