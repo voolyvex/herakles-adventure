@@ -32,8 +32,6 @@ __all__ = [
     "ARM_NAMES",
     "DENSE",
     "SPARSE",
-    "HYBRID",
-    "HYBRID_RERANK",
 ]
 
 # The canonical reporting order, and the single source of every arm name. The

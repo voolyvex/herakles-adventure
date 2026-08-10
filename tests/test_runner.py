@@ -88,7 +88,9 @@ def weak_arm() -> FakeRetriever:
 
 
 class TestTheRunnerVisitsEveryArm:
-    def test_every_configured_arm_produces_a_result(self, dataset, perfect_arm, weak_arm):
+    def test_every_configured_arm_produces_a_result(
+        self, dataset, perfect_arm, weak_arm
+    ):
         results = run_evaluation([perfect_arm, weak_arm], dataset)
 
         assert [arm.name for arm in results.arms] == ["perfect", "weak"]
@@ -142,7 +144,9 @@ class TestReportedMetrics:
         assert results.gate_metric == f"ndcg@{GATE_K}"
         assert GATE_K == 5
 
-    def test_the_winning_configuration_is_identified(self, dataset, perfect_arm, weak_arm):
+    def test_the_winning_configuration_is_identified(
+        self, dataset, perfect_arm, weak_arm
+    ):
         results = run_evaluation([weak_arm, perfect_arm], dataset)
 
         assert results.best_arm() == "perfect"
@@ -214,7 +218,9 @@ class TestUnanswerableStratum:
             "unanswerable_precision"
         ] == pytest.approx(0.0)
 
-    def test_the_unanswerable_stratum_does_not_drag_down_ndcg(self, dataset, perfect_arm):
+    def test_the_unanswerable_stratum_does_not_drag_down_ndcg(
+        self, dataset, perfect_arm
+    ):
         """nDCG is undefined for a question with no relevant document, so
         averaging a zero in from that stratum would understate every arm."""
         result = run_evaluation([perfect_arm], dataset).arms[0]
@@ -454,7 +460,9 @@ class TestRerankedArm:
                 ]
 
         dense = FakeRetriever("dense", responses={"q": ["a.md"]}, scores={"q": [0.9]})
-        sparse = FakeRetriever("sparse", responses={"q": ["b.md"]}, scores={"q": [12.0]})
+        sparse = FakeRetriever(
+            "sparse", responses={"q": ["b.md"]}, scores={"q": [12.0]}
+        )
         arm = RerankedArm(HybridArm(dense, sparse), FakeReranker())
 
         results = arm.retrieve("q", k=5)
@@ -549,7 +557,7 @@ class TestAdaptingARetrievalStack:
         """
         stack = self.Stack(dense=object(), sparse=None, reranker=object())
 
-        with pytest.raises(RuntimeError) as raised:
+        with pytest.raises(RuntimeError, match="silently score them zero") as raised:
             adapt_stack(stack)
 
         assert "sparse" in str(raised.value).lower()
@@ -566,6 +574,9 @@ class TestAdaptingARetrievalStack:
         from myth_eval import cli
 
         output = tmp_path / "results.json"
+        # Its own dataset, so the test does not depend on what is committed.
+        dataset_path = tmp_path / "questions.json"
+        dataset.save(dataset_path)
 
         # Stand in for the live stack at the seam, so no index is needed.
         def build(embedding_model=None, with_reranker=True):
@@ -578,26 +589,11 @@ class TestAdaptingARetrievalStack:
         cli.build_live_arms = build
         try:
             with pytest.raises(RuntimeError):
-                cli.main(["--output", str(output)])
+                cli.main(["--dataset", str(dataset_path), "--output", str(output)])
         finally:
             cli.build_live_arms = original
 
         assert not output.exists(), "a refused run must write no results file"
-
-    def test_it_names_the_failure_so_the_operator_can_act(self):
-        stack = self.Stack(dense=object(), sparse=None, reranker=object())
-
-        with pytest.raises(RuntimeError, match="silently score them zero"):
-            adapt_stack(stack)
-
-    def test_it_refuses_when_the_dense_retriever_failed_to_initialise(self):
-        """The same reasoning as sparse: no arm is measurable without dense."""
-        stack = self.Stack(dense=None, sparse=object(), reranker=object())
-
-        with pytest.raises(RuntimeError) as raised:
-            adapt_stack(stack)
-
-        assert "dense" in str(raised.value).lower()
 
     def test_a_whole_stack_adapts_to_the_protocol(self):
         reranker = object()

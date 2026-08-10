@@ -259,21 +259,16 @@ def adapt_stack(
         The dense adapter, the sparse adapter, and the reranker or None.
 
     Raises:
-        RuntimeError: If either retriever is absent. ``RAGSystem`` swallows a
-            tokeniser failure into a warning, so an agent going missing is
-            silent at its source; refusing here is what stops a run scoring the
-            affected arms zero for reasons that have nothing to do with
-            retrieval quality. The reranker is the one part that may legitimately
-            be absent, because dropping the reranked arm is a supported choice.
+        RuntimeError: If the stack's sparse retriever is absent. ``RAGSystem``
+            swallows a tokeniser failure into a warning, so the sparse agent
+            going missing is silent at its source; refusing here is what stops
+            a run scoring the sparse and hybrid arms zero for reasons that have
+            nothing to do with retrieval quality. Dense has no such failure
+            mode — ``RAGSystem`` cannot come up without it — so its absence is
+            a programming error and surfaces as ``AttributeError``. The
+            reranker may legitimately be absent, because dropping the reranked
+            arm is a supported choice.
     """
-    dense_agent = getattr(stack, "dense", None)
-    if dense_agent is None:
-        raise RuntimeError(
-            "The dense retriever failed to initialise, so no arm can be "
-            "measured. Refusing to produce results that would silently score "
-            "them zero."
-        )
-
     sparse_agent = getattr(stack, "sparse", None)
     if sparse_agent is None:
         raise RuntimeError(
@@ -282,7 +277,7 @@ def adapt_stack(
             "would silently score them zero."
         )
 
-    dense = DenseRetrieverAdapter(dense_agent)
+    dense = DenseRetrieverAdapter(stack.dense)
     sparse = SparseRetrieverAdapter(sparse_agent)
     reranker = getattr(stack, "reranker", None) if with_reranker else None
     return dense, sparse, reranker
