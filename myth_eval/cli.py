@@ -148,6 +148,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Run against scripted retrievers instead of the real index.",
     )
+    parser.add_argument(
+        "--pool-output",
+        default=None,
+        help=(
+            "Also write the candidate pool for manual grading to this path "
+            "(default: eval_data/candidate_pool.json). Pooling reuses this "
+            "run's results, so it costs no extra retrieval."
+        ),
+        nargs="?",
+        const="",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -170,6 +181,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     _print_summary(results)
     print(f"\nResults written to {written}")
+
+    if args.pool_output is not None:
+        from myth_eval.pool import build_pool, default_pool_path
+
+        pool = build_pool(results.arms, dataset, depth=args.k)
+        pool_path = Path(args.pool_output) if args.pool_output else default_pool_path()
+        pool_written = pool.save(pool_path)
+        print(
+            f"Candidate pool: {pool.candidate_count()} grading decisions over "
+            f"{len(pool.gradeable)} questions "
+            f"({len(pool.unique_documents)} distinct documents) "
+            f"-> {pool_written}"
+        )
     return 0
 
 

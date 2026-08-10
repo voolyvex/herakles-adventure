@@ -67,7 +67,17 @@ def default_results_path() -> Path:
 
 @dataclass
 class QuestionOutcome:
-    """One arm's scored result for one question. Retained for pooling."""
+    """One arm's scored result for one question. Retained for pooling.
+
+    ``items`` keeps the retrieved passages themselves, not just their source
+    documents, because the candidate pool a human grades has to show the text
+    that was actually retrieved — a filename alone is not something anyone can
+    assign a relevance grade to. Retaining them here means pooling reads one
+    evaluation pass rather than paying for a second round of retrieval.
+
+    They are held in memory only: ``ArmResult.to_dict`` does not serialise
+    outcomes, so the results file stays a compact metrics artefact.
+    """
 
     question_id: str
     stratum: str
@@ -75,6 +85,7 @@ class QuestionOutcome:
     scores: List[float]
     latency_seconds: float
     metrics: Dict[str, float] = field(default_factory=dict)
+    items: List[RetrievedItem] = field(default_factory=list)
 
 
 @dataclass
@@ -239,6 +250,7 @@ def evaluate_arm(
                 scores=scores,
                 latency_seconds=elapsed,
                 metrics=_score_question(question, documents, scores),
+                items=list(items),
             )
         )
 
