@@ -2,6 +2,12 @@
 
     python -m myth_eval.cli --output eval_data/results.json
 
+Adding ``--pool-output`` also emits the candidate pool for manual grading,
+built from the union of every arm's top-10 results. It reads the run that has
+already happened, so pooling costs no extra retrieval:
+
+    python -m myth_eval.cli --pool-output
+
 Constructing the real retrieval stack is deferred into :func:`build_live_arms`,
 which is the only place in the harness that imports torch, chromadb or the
 agents. Everything above it — runner, metrics, dataset, arms — is driven through
@@ -185,7 +191,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.pool_output is not None:
         from myth_eval.pool import build_pool, default_pool_path
 
-        pool = build_pool(results.arms, dataset, depth=args.k)
+        # The spec fixes the pooling depth at 10. A deeper retrieval run must
+        # not widen the pool past it, so --k can only ever pool shallower.
+        pool = build_pool(results.arms, dataset, depth=min(args.k, POOL_DEPTH))
         pool_path = Path(args.pool_output) if args.pool_output else default_pool_path()
         pool_written = pool.save(pool_path)
         print(

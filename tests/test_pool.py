@@ -349,6 +349,38 @@ class TestPoolDepth:
         assert pool.gradeable[0].documents == ["a.md", "b.md"]
         assert pool.to_dict()["provenance"]["pool_depth"] == 2
 
+    def test_a_deeper_retrieval_run_does_not_widen_the_pool(self, tmp_path):
+        """--k sets retrieval depth; it must not push the pool past ten."""
+        from myth_eval.cli import main
+
+        question = factual()
+        dataset = make_dataset(question)
+        # Labelled, because build_fake_arms scripts its responses from the
+        # relevance map — an unlabelled question yields an empty pool.
+        question.relevance = {f"doc{i:02d}.md": 2 for i in range(15)}
+        dataset_path = tmp_path / "questions.json"
+        dataset.save(dataset_path)
+
+        pool_path = tmp_path / "pool.json"
+        exit_code = main(
+            [
+                "--fake",
+                "--k",
+                "20",
+                "--dataset",
+                str(dataset_path),
+                "--output",
+                str(tmp_path / "results.json"),
+                "--pool-output",
+                str(pool_path),
+            ]
+        )
+
+        emitted = CandidatePool.load(pool_path)
+        assert exit_code == 0
+        assert emitted["provenance"]["pool_depth"] == POOL_DEPTH
+        assert len(emitted["questions"][0]["candidates"]) == POOL_DEPTH
+
 
 class TestReproducibility:
     def test_the_same_inputs_produce_byte_identical_output(self, tmp_path):
@@ -368,20 +400,30 @@ class TestReproducibility:
 
         assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
 
-    def test_candidates_are_ordered_deterministically_not_by_arm_order(self):
-        """Reordering the arms must not reorder the sheet."""
+    def test_arm_order_changes_neither_the_ordering_nor_the_excerpts(self):
+        """Reordering the arms must not reorder the sheet or swap a passage.
+
+        The excerpt matters as much as the ordering: two arms returning the
+        same document at the same rank must not hand the labeller a different
+        passage depending on which arm was processed first.
+        """
         question = factual()
         dataset = make_dataset(question)
         scripts = {
-            "dense": {question.question: ["b.md", "a.md"]},
-            "sparse": {question.question: ["c.md"]},
+            "dense": {question.question: ["tied.md", "b.md", "a.md"]},
+            "sparse": {question.question: ["tied.md", "c.md"]},
         }
 
         forward = build_pool(arms_for(dataset, **scripts), dataset)
-        reversed_arms = list(reversed(arms_for(dataset, **scripts)))
-        backward = build_pool(reversed_arms, dataset)
+        backward = build_pool(list(reversed(arms_for(dataset, **scripts))), dataset)
 
-        assert forward.gradeable[0].documents == backward.gradeable[0].documents
+        def view(pool):
+            return [
+                (c.source_document, c.chunk_id, c.excerpt)
+                for c in pool.gradeable[0].candidates
+            ]
+
+        assert view(forward) == view(backward)
 
     def test_ties_on_rank_break_on_document_name(self):
         question = factual()

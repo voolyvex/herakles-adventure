@@ -39,10 +39,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from myth_eval.dataset import GRADE_LABELS, Dataset, Question
-from myth_eval.runner import POOL_DEPTH, ArmResult, QuestionOutcome
+from myth_eval.runner import POOL_DEPTH, ArmResult
 
 __all__ = [
     "PooledCandidate",
@@ -238,14 +238,18 @@ class CandidatePool:
 
 
 def _outcomes_by_question(
-    arm: ArmResult,
-) -> Mapping[str, QuestionOutcome]:
-    return {outcome.question_id: outcome for outcome in arm.outcomes}
+    arms: Sequence[ArmResult],
+) -> List[tuple]:
+    """Index each arm's outcomes by question id, once for the whole run."""
+    return [
+        (arm.name, {outcome.question_id: outcome for outcome in arm.outcomes})
+        for arm in arms
+    ]
 
 
 def _pool_one_question(
     question: Question,
-    arms: Sequence[ArmResult],
+    indexed_arms: Sequence[tuple],
     depth: int,
 ) -> QuestionPool:
     """Union one question's results across arms, deduplicated by document.
@@ -257,8 +261,8 @@ def _pool_one_question(
     """
     merged: Dict[str, PooledCandidate] = {}
 
-    for arm in arms:
-        outcome = _outcomes_by_question(arm).get(question.id)
+    for arm_name, outcomes in indexed_arms:
+        outcome = outcomes.get(question.id)
         if outcome is None:
             continue
 
@@ -277,15 +281,18 @@ def _pool_one_question(
                     excerpt=_excerpt(item.text),
                     chunk_id=item.chunk_id,
                     best_rank=item.rank,
-                    found_by=[arm.name],
+                    found_by=[arm_name],
                 )
                 continue
 
-            if arm.name not in existing.found_by:
-                existing.found_by.append(arm.name)
-            if item.rank < existing.best_rank:
-                # A better-ranked chunk of the same document replaces the
-                # window, so the excerpt shown is the strongest passage found.
+            if arm_name not in existing.found_by:
+                existing.found_by.append(arm_name)
+            # A better-ranked chunk of the same document replaces the window,
+            # so the excerpt shown is the strongest passage found. Chunk id
+            # breaks a rank tie, making the choice total: without it, two arms
+            # returning the same document at the same rank would hand the
+            # labeller a different passage depending on arm order.
+            if (item.rank, item.chunk_id) < (existing.best_rank, existing.chunk_id):
                 existing.best_rank = item.rank
                 existing.excerpt = _excerpt(item.text)
                 existing.chunk_id = item.chunk_id
@@ -329,9 +336,10 @@ def build_pool(
     """
     gradeable: List[QuestionPool] = []
     diagnostic_only: List[QuestionPool] = []
+    indexed_arms = _outcomes_by_question(arms)
 
     for question in dataset:
-        pool = _pool_one_question(question, arms, depth)
+        pool = _pool_one_question(question, indexed_arms, depth)
         if question.is_unanswerable:
             diagnostic_only.append(pool)
         else:
