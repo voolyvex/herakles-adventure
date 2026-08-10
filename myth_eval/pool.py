@@ -311,7 +311,7 @@ class ArmRetrievals:
 
 def _pool_one_question(
     question: Question,
-    indexed_arms: Sequence[ArmRetrievals],
+    arms: Sequence[ArmRetrievals],
     depth: int,
 ) -> QuestionPool:
     """Union one question's results across arms, deduplicated by document.
@@ -323,7 +323,7 @@ def _pool_one_question(
     """
     merged: Dict[str, PooledCandidate] = {}
 
-    for arm in indexed_arms:
+    for arm in arms:
         items = arm.retrievals.get(question.id)
         if not items:
             continue

@@ -24,9 +24,11 @@ from myth_eval.pool import (
     ArmRetrievals,
     CandidatePool,
     build_pool_from_retrievals,
+    clamp_pool_depth,
     default_pool_path,
 )
 from myth_eval.retrieval import RetrievedItem
+from myth_eval.runner import run_evaluation
 
 
 def make_dataset(*questions: Question) -> Dataset:
@@ -58,18 +60,19 @@ def retrievals_for(dataset: Dataset, **scripts: dict) -> list:
     protocol directly — the same call the runner makes, minus the scoring the
     pool never looks at.
     """
-    return [
-        ArmRetrievals(
-            name=name,
-            retrievals={
-                question.id: FakeRetriever(name, responses=responses).retrieve(
-                    question.question, POOL_DEPTH
-                )
-                for question in dataset
-            },
+    arms = []
+    for name, responses in scripts.items():
+        retriever = FakeRetriever(name, responses=responses)
+        arms.append(
+            ArmRetrievals(
+                name=name,
+                retrievals={
+                    question.id: retriever.retrieve(question.question, POOL_DEPTH)
+                    for question in dataset
+                },
+            )
         )
-        for name, responses in scripts.items()
-    ]
+    return arms
 
 
 class TestUnionAcrossArms:
@@ -373,6 +376,67 @@ class TestUnanswerableQuestions:
 
         assert pool.candidate_count() == 1
         assert pool.to_dict()["summary"]["questions_not_graded"] == 1
+
+
+class TestTheClampingRule:
+    """The rule that keeps a deeper retrieval run from widening the pool.
+
+    It lives beside the depth it protects. These pin it directly; the two
+    end-to-end tests below drive it through the command, which is where a
+    caller actually meets it.
+    """
+
+    def test_a_deeper_requested_depth_comes_back_at_the_pooling_depth(self):
+        assert clamp_pool_depth(20) == POOL_DEPTH
+
+    def test_a_shallower_requested_depth_is_left_alone(self):
+        """Shallow is a legitimate smoke test, so the rule does not raise it."""
+        assert clamp_pool_depth(3) == 3
+
+    def test_the_pooling_depth_itself_is_unchanged(self):
+        assert clamp_pool_depth(POOL_DEPTH) == POOL_DEPTH
+
+
+class TestTheHandoverFromARun:
+    """What the runner passes to pooling, and that it costs no retrieval."""
+
+    def test_a_completed_run_hands_over_what_each_arm_retrieved(self):
+        question = factual()
+        dataset = make_dataset(question)
+        retriever = FakeRetriever("dense", responses={question.question: ["a.md"]})
+
+        results = run_evaluation([retriever], dataset)
+        handed_over = results.retrievals_for_pooling()
+
+        assert [arm.name for arm in handed_over] == ["dense"]
+        assert handed_over[0].retrievals[question.id][0].source_document == "a.md"
+
+    def test_the_handover_reads_the_run_rather_than_retrieving_again(self):
+        """The property that justifies the runner retaining passages at all."""
+        question = factual()
+        dataset = make_dataset(question)
+        retriever = FakeRetriever("dense", responses={question.question: ["a.md"]})
+
+        results = run_evaluation([retriever], dataset)
+        after_the_run = len(retriever.calls)
+
+        build_pool_from_retrievals(results.retrievals_for_pooling(), dataset)
+
+        assert len(retriever.calls) == after_the_run
+
+    def test_a_pool_built_from_the_handover_matches_one_built_directly(self):
+        """The handover is a narrowing, not a transformation."""
+        question = factual()
+        dataset = make_dataset(question)
+        scripts = {question.question: ["b.md", "a.md"]}
+
+        results = run_evaluation([FakeRetriever("dense", responses=scripts)], dataset)
+        from_run = build_pool_from_retrievals(results.retrievals_for_pooling(), dataset)
+        direct = build_pool_from_retrievals(
+            retrievals_for(dataset, dense=scripts), dataset
+        )
+
+        assert from_run.to_dict() == direct.to_dict()
 
 
 class TestPoolDepth:

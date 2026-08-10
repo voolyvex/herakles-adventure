@@ -27,7 +27,6 @@ from typing import Any, List, Optional, Sequence
 from myth_eval.dataset import Dataset, default_dataset_path
 from myth_eval.pool import (
     POOL_DEPTH,
-    ArmRetrievals,
     build_pool_from_retrievals,
     clamp_pool_depth,
     default_pool_path,
