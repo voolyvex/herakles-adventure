@@ -32,6 +32,7 @@ from myth_eval.metrics import (
     recall_at_k,
     unanswerable_precision,
 )
+from myth_eval.pool import POOL_DEPTH
 from myth_eval.retrieval import RetrievedItem, Retriever
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,8 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "K_VALUES",
     "GATE_K",
+    # Re-exported from myth_eval.pool, which owns it: the runner defaults its
+    # retrieval depth to the pooling depth so one pass serves both.
     "POOL_DEPTH",
     "QuestionOutcome",
     "ArmResult",
@@ -52,7 +55,6 @@ __all__ = [
 # them as the gating figure.
 K_VALUES = (3, 5, 10)
 GATE_K = 5
-POOL_DEPTH = 10
 
 # Per-stratum figures are reported with this marker attached, so a reader cannot
 # mistake a diagnostic for a gate.

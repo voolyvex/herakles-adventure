@@ -47,21 +47,34 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 from myth_eval.dataset import GRADE_LABELS, Dataset, Question
-from myth_eval.runner import POOL_DEPTH, ArmResult, QuestionOutcome
+from myth_eval.retrieval import RetrievedItem
+
+if TYPE_CHECKING:  # pragma: no cover - the wide form's types, for annotations only
+    from myth_eval.runner import ArmResult
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "EXCERPT_CHARS",
+    "POOL_DEPTH",
+    "ArmRetrievals",
     "PooledCandidate",
     "QuestionPool",
     "CandidatePool",
     "build_pool",
+    "build_pool_from_retrievals",
+    "clamp_pool_depth",
     "default_pool_path",
 ]
+
+# How deep into each arm's ranking the union is taken. The spec fixes it at 10,
+# and it is a pooling concept: it says how much of a run reaches a human, not
+# how much the runner retrieves. The runner defaults its retrieval depth to
+# this so one pass serves both, and reads it from here.
+POOL_DEPTH = 10
 
 # How much of a chunk travels into the grading sheet. Enough to decide from,
 # short enough that a few hundred candidates stay readable in one sitting; the
@@ -86,6 +99,18 @@ def default_pool_path() -> Path:
     scripted fake arms — which sitting at this path would read as genuine.
     """
     return Path(__file__).resolve().parent.parent / "eval_data" / "candidate_pool.json"
+
+
+def clamp_pool_depth(requested: int) -> int:
+    """The depth to pool at, given a requested retrieval depth.
+
+    The spec fixes the pooling depth at 10. A deeper retrieval run must not
+    widen the pool past it — everything outside the pool scores zero, so a pool
+    wider than the spec's would grade documents a conforming pool never offers,
+    and the gold sets would not be comparable. Requesting shallower is allowed:
+    ``build_pool`` warns about it rather than refusing.
+    """
+    return min(requested, POOL_DEPTH)
 
 
 def _excerpt(text: str, limit: int = EXCERPT_CHARS) -> str:
@@ -256,24 +281,35 @@ class CandidatePool:
 
 
 @dataclass
-class _IndexedArm:
-    """One arm's outcomes keyed by question id.
+class ArmRetrievals:
+    """Everything pooling needs from one arm: its name, and what it retrieved.
 
-    Internal. It exists so pooling looks each question up once per arm rather
-    than scanning that arm's whole outcome list per question — and so the
-    signatures below can say what they carry.
+    This is the whole input to pooling. Scores, latency percentiles, per-stratum
+    breakdowns and diagnostics are an evaluation's business, not a pool's — a
+    caller with retrieved items in hand can build a pool without running an
+    evaluation at all.
+
+    Attributes:
+        name: The arm's name, recorded as attribution under diagnostics.
+        retrievals: What the arm returned per question, keyed by question id.
+            Keyed rather than listed so pooling looks each question up once per
+            arm instead of scanning the arm's whole output per question. A
+            question the arm returned nothing for may be absent or empty; both
+            mean the same thing.
     """
 
     name: str
-    outcomes: Dict[str, QuestionOutcome]
+    retrievals: Dict[str, List[RetrievedItem]]
 
 
-def _outcomes_by_question(arms: Sequence[ArmResult]) -> List[_IndexedArm]:
-    """Index each arm's outcomes by question id, once for the whole run."""
+def _retrievals_from_arms(arms: Sequence["ArmResult"]) -> List[ArmRetrievals]:
+    """Narrow evaluated arms down to what pooling reads: name and retrievals."""
     return [
-        _IndexedArm(
+        ArmRetrievals(
             name=arm.name,
-            outcomes={outcome.question_id: outcome for outcome in arm.outcomes},
+            retrievals={
+                outcome.question_id: list(outcome.items) for outcome in arm.outcomes
+            },
         )
         for arm in arms
     ]
@@ -281,7 +317,7 @@ def _outcomes_by_question(arms: Sequence[ArmResult]) -> List[_IndexedArm]:
 
 def _pool_one_question(
     question: Question,
-    indexed_arms: Sequence[_IndexedArm],
+    indexed_arms: Sequence[ArmRetrievals],
     depth: int,
 ) -> QuestionPool:
     """Union one question's results across arms, deduplicated by document.
@@ -294,11 +330,11 @@ def _pool_one_question(
     merged: Dict[str, PooledCandidate] = {}
 
     for arm in indexed_arms:
-        outcome = arm.outcomes.get(question.id)
-        if outcome is None:
+        items = arm.retrievals.get(question.id)
+        if not items:
             continue
 
-        for item in outcome.items[:depth]:
+        for item in items[:depth]:
             document = item.source_document
             # normalise_hit defaults a missing source to "", which would emit a
             # blank, ungradeable candidate. Drop it rather than ask a human to
@@ -351,19 +387,48 @@ def _pool_one_question(
 
 
 def build_pool(
-    arms: Sequence[ArmResult],
+    arms: Sequence["ArmResult"],
     dataset: Dataset,
     depth: int = POOL_DEPTH,
 ) -> CandidatePool:
-    """Build the deduplicated candidate pool from every arm's results.
+    """Build the candidate pool from evaluated arms.
+
+    An adapter over :func:`build_pool_from_retrievals`: it narrows each arm to
+    the two fields pooling reads, and is here so callers holding a completed
+    evaluation need not do that themselves.
 
     Args:
         arms: The evaluated arms, carrying their retained per-question outcomes.
         dataset: The question set the arms ran over.
-        depth: How deep into each arm's ranking to pool. Defaults to the
-            pooling depth the spec fixes at 10. Pooling shallower is allowed —
-            a smoke test is a legitimate reason — but it is warned about, and
-            the recorded ``pool_depth`` keeps it visible in the artefact.
+        depth: How deep into each arm's ranking to pool. See
+            :func:`build_pool_from_retrievals`.
+
+    Returns:
+        The pool, partitioned into questions to grade and questions reported
+        for diagnostics only.
+    """
+    return build_pool_from_retrievals(_retrievals_from_arms(arms), dataset, depth)
+
+
+def build_pool_from_retrievals(
+    arms: Sequence[ArmRetrievals],
+    dataset: Dataset,
+    depth: int = POOL_DEPTH,
+) -> CandidatePool:
+    """Build the deduplicated candidate pool from what each arm retrieved.
+
+    Pooling needs no evaluation: an arm's name and its retrieved items per
+    question are the whole input, so a caller can pool without scoring anything.
+
+    Args:
+        arms: What each arm retrieved, per question.
+        dataset: The question set the arms ran over.
+        depth: How deep into each arm's ranking to pool. Defaults to
+            :data:`POOL_DEPTH`, the depth the spec fixes at 10. Pooling
+            shallower is allowed — a smoke test is a legitimate reason — but it
+            is warned about, and the recorded ``pool_depth`` keeps it visible in
+            the artefact. Callers turning a requested retrieval depth into a
+            pooling depth should pass it through :func:`clamp_pool_depth`.
 
     Returns:
         The pool, partitioned into questions to grade and questions reported
@@ -385,10 +450,8 @@ def build_pool(
 
     gradeable: List[QuestionPool] = []
     diagnostic_only: List[QuestionPool] = []
-    indexed_arms = _outcomes_by_question(arms)
-
     for question in dataset:
-        pool = _pool_one_question(question, indexed_arms, depth)
+        pool = _pool_one_question(question, arms, depth)
         if question.is_unanswerable:
             diagnostic_only.append(pool)
         else:
