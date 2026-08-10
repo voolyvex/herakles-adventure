@@ -32,7 +32,7 @@ from myth_eval.metrics import (
     recall_at_k,
     unanswerable_precision,
 )
-from myth_eval.pool import POOL_DEPTH
+from myth_eval.pool import POOL_DEPTH, ArmRetrievals
 from myth_eval.retrieval import RetrievedItem, Retriever
 
 logger = logging.getLogger(__name__)
@@ -143,6 +143,21 @@ class EvaluationResults:
         """Which configuration wins on the gating metric."""
         scores = self.aggregate_gate_scores()
         return max(scores, key=scores.get) if scores else None
+
+    def retrievals_for_pooling(self) -> List[ArmRetrievals]:
+        """This run's retrieved passages, in the shape pooling takes.
+
+        The handover ``QuestionOutcome.items`` exists for. Reading it here means
+        a pool is built from the pass that has already happened, rather than
+        paying for a second round of retrieval.
+        """
+        return [
+            ArmRetrievals(
+                name=arm.name,
+                retrievals={o.question_id: list(o.items) for o in arm.outcomes},
+            )
+            for arm in self.arms
+        ]
 
     def to_dict(self) -> Dict[str, Any]:
         return {

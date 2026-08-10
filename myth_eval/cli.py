@@ -27,7 +27,8 @@ from typing import Any, List, Optional, Sequence
 from myth_eval.dataset import Dataset, default_dataset_path
 from myth_eval.pool import (
     POOL_DEPTH,
-    build_pool,
+    ArmRetrievals,
+    build_pool_from_retrievals,
     clamp_pool_depth,
     default_pool_path,
 )
@@ -190,7 +191,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"\nResults written to {written}")
 
     if args.pool_output is not None:
-        pool = build_pool(results.arms, dataset, depth=clamp_pool_depth(args.k))
+        # Narrowed from the run that has already happened, so pooling costs no
+        # extra retrieval.
+        pool = build_pool_from_retrievals(
+            results.retrievals_for_pooling(),
+            dataset,
+            depth=clamp_pool_depth(args.k),
+        )
         pool_path = Path(args.pool_output) if args.pool_output else default_pool_path()
         pool_written = pool.save(pool_path)
         print(

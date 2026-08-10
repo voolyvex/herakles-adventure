@@ -20,12 +20,13 @@ from myth_eval.dataset import Dataset, Question, Stratum, default_dataset_path
 from myth_eval.fakes import FakeRetriever
 from myth_eval.pool import (
     EXCERPT_CHARS,
+    POOL_DEPTH,
+    ArmRetrievals,
     CandidatePool,
-    build_pool,
+    build_pool_from_retrievals,
     default_pool_path,
 )
 from myth_eval.retrieval import RetrievedItem
-from myth_eval.runner import POOL_DEPTH, evaluate_arm
 
 
 def make_dataset(*questions: Question) -> Dataset:
@@ -49,10 +50,24 @@ def unanswerable(qid: str = "unanswerable-01") -> Question:
     )
 
 
-def arms_for(dataset: Dataset, **scripts: dict) -> list:
-    """Evaluate one fake arm per keyword, each scripted by question text."""
+def retrievals_for(dataset: Dataset, **scripts: dict) -> list:
+    """One arm's retrievals per keyword, each scripted by question text.
+
+    Retrieval only: nothing here scores a question or aggregates a metric,
+    because pooling reads neither. The fake is driven through the retrieval
+    protocol directly — the same call the runner makes, minus the scoring the
+    pool never looks at.
+    """
     return [
-        evaluate_arm(FakeRetriever(name, responses=responses), dataset)
+        ArmRetrievals(
+            name=name,
+            retrievals={
+                question.id: FakeRetriever(name, responses=responses).retrieve(
+                    question.question, POOL_DEPTH
+                )
+                for question in dataset
+            },
+        )
         for name, responses in scripts.items()
     ]
 
@@ -63,14 +78,14 @@ class TestUnionAcrossArms:
     def test_the_pool_is_the_union_of_every_arm_top_results(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["a.md", "b.md"]},
             sparse={question.question: ["c.md"]},
             hybrid={question.question: ["b.md", "d.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert sorted(pool.gradeable[0].documents) == ["a.md", "b.md", "c.md", "d.md"]
 
@@ -78,27 +93,27 @@ class TestUnionAcrossArms:
         """The fairness property: pooling must not favour the majority arm."""
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["common.md"]},
             sparse={question.question: ["common.md"]},
             lone={question.question: ["only_this_arm_found_it.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert "only_this_arm_found_it.md" in pool.gradeable[0].documents
 
     def test_every_arm_is_recorded_in_provenance(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["a.md"]},
             sparse={question.question: ["b.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.arms == ["dense", "sparse"]
         assert pool.to_dict()["provenance"]["arms"] == ["dense", "sparse"]
@@ -106,13 +121,13 @@ class TestUnionAcrossArms:
     def test_an_arm_that_returned_nothing_contributes_nothing(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["a.md"]},
             silent={},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == ["a.md"]
 
@@ -121,14 +136,14 @@ class TestDeduplication:
     def test_a_document_found_by_three_arms_is_one_grading_decision(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["shared.md"]},
             sparse={question.question: ["shared.md"]},
             hybrid={question.question: ["shared.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == ["shared.md"]
         assert pool.candidate_count() == 1
@@ -140,25 +155,25 @@ class TestDeduplication:
         # The fake returns one chunk per named document, so naming the same
         # document repeatedly is how an arm returning several of its chunks
         # reaches the pooler.
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["same.md", "same.md", "same.md", "other.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == ["other.md", "same.md"]
 
     def test_deduplication_records_every_arm_that_found_the_document(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["shared.md"]},
             sparse={question.question: ["shared.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].candidates[0].found_by == ["dense", "sparse"]
 
@@ -166,13 +181,13 @@ class TestDeduplication:
         """The labeller should read the strongest passage any arm found."""
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             weak={question.question: ["filler.md", "filler2.md", "target.md"]},
             strong={question.question: ["target.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
         candidate = next(
             c for c in pool.gradeable[0].candidates if c.source_document == "target.md"
         )
@@ -183,9 +198,9 @@ class TestDeduplication:
     def test_a_blank_source_document_is_not_offered_for_grading(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["", "real.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["", "real.md"]})
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == ["real.md"]
 
@@ -194,9 +209,9 @@ class TestShapedForGrading:
     def test_each_question_carries_its_text_alongside_its_candidates(self):
         question = factual(text="Who equipped Perseus with the winged shoes?")
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["033_PERSEUS.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["033_PERSEUS.md"]})
 
-        emitted = build_pool(arms, dataset).to_dict()["questions"][0]
+        emitted = build_pool_from_retrievals(arms, dataset).to_dict()["questions"][0]
 
         assert emitted["question"] == "Who equipped Perseus with the winged shoes?"
         assert emitted["stratum"] == Stratum.FACTUAL
@@ -205,18 +220,18 @@ class TestShapedForGrading:
     def test_every_candidate_has_an_empty_grade_slot_to_fill_in(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md", "b.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md", "b.md"]})
 
-        emitted = build_pool(arms, dataset).to_dict()["questions"][0]
+        emitted = build_pool_from_retrievals(arms, dataset).to_dict()["questions"][0]
 
         assert [c["grade"] for c in emitted["candidates"]] == [None, None]
 
     def test_candidates_carry_the_text_a_labeller_reads(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md"]})
 
-        emitted = build_pool(arms, dataset).to_dict()["questions"][0]
+        emitted = build_pool_from_retrievals(arms, dataset).to_dict()["questions"][0]
 
         assert emitted["candidates"][0]["excerpt"]
 
@@ -225,18 +240,22 @@ class TestShapedForGrading:
         dataset = make_dataset(question)
         # A chunk longer than the window, built directly through the protocol
         # type: the fake's own passages are short by construction.
-        arm = evaluate_arm(FakeRetriever("dense"), dataset)
-        arm.outcomes[0].items = [
-            RetrievedItem(
-                chunk_id="long_c0",
-                source_document="long.md",
-                text="word " * 500,
-                score=1.0,
-                rank=0,
-            )
-        ]
+        arm = ArmRetrievals(
+            name="dense",
+            retrievals={
+                question.id: [
+                    RetrievedItem(
+                        chunk_id="long_c0",
+                        source_document="long.md",
+                        text="word " * 500,
+                        score=1.0,
+                        rank=0,
+                    )
+                ]
+            },
+        )
 
-        pool = build_pool([arm], dataset)
+        pool = build_pool_from_retrievals([arm], dataset)
         excerpt = pool.gradeable[0].candidates[0].excerpt
 
         assert len(excerpt) <= EXCERPT_CHARS + 3
@@ -246,9 +265,9 @@ class TestShapedForGrading:
         """Grading blind to arm is what stops the gold set favouring one arm."""
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md"]})
 
-        emitted = build_pool(arms, dataset).to_dict()["questions"][0]
+        emitted = build_pool_from_retrievals(arms, dataset).to_dict()["questions"][0]
         candidate = emitted["candidates"][0]
 
         assert "found_by" not in candidate
@@ -266,9 +285,9 @@ class TestShapedForGrading:
         """
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["b.md", "a.md", "c.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["b.md", "a.md", "c.md"]})
 
-        emitted = build_pool(arms, dataset).to_dict()
+        emitted = build_pool_from_retrievals(arms, dataset).to_dict()
 
         graded = [c["source_document"] for c in emitted["questions"][0]["candidates"]]
         assert graded == ["a.md", "b.md", "c.md"]
@@ -286,16 +305,16 @@ class TestShapedForGrading:
     def test_arm_attribution_survives_as_a_diagnostic(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md"]})
 
-        diagnostics = build_pool(arms, dataset).to_dict()["diagnostics"]
+        diagnostics = build_pool_from_retrievals(arms, dataset).to_dict()["diagnostics"]
 
         attributed = diagnostics["attribution"][0]["candidates"][0]
         assert attributed["found_by"] == ["dense"]
 
     def test_the_sheet_states_the_grading_scale(self):
         dataset = make_dataset(factual())
-        emitted = build_pool([], dataset).to_dict()
+        emitted = build_pool_from_retrievals([], dataset).to_dict()
 
         assert emitted["grade_labels"] == {
             "0": "irrelevant",
@@ -311,7 +330,7 @@ class TestUnanswerableQuestions:
     def test_an_unanswerable_question_is_not_emitted_as_a_grading_task(self):
         answerable, skipped = factual(), unanswerable()
         dataset = make_dataset(answerable, skipped)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={
                 answerable.question: ["a.md"],
@@ -319,7 +338,7 @@ class TestUnanswerableQuestions:
             },
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert [p.question_id for p in pool.gradeable] == ["factual-01"]
         assert "unanswerable-01" not in {
@@ -329,9 +348,9 @@ class TestUnanswerableQuestions:
     def test_what_the_arms_returned_for_it_is_still_reported(self):
         skipped = unanswerable()
         dataset = make_dataset(skipped)
-        arms = arms_for(dataset, dense={skipped.question: ["near_miss.md"]})
+        arms = retrievals_for(dataset, dense={skipped.question: ["near_miss.md"]})
 
-        diagnostics = build_pool(arms, dataset).to_dict()["diagnostics"]
+        diagnostics = build_pool_from_retrievals(arms, dataset).to_dict()["diagnostics"]
 
         assert diagnostics["unanswerable"][0]["id"] == "unanswerable-01"
         assert (
@@ -342,7 +361,7 @@ class TestUnanswerableQuestions:
     def test_its_candidates_are_not_counted_as_grading_decisions(self):
         answerable, skipped = factual(), unanswerable()
         dataset = make_dataset(answerable, skipped)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={
                 answerable.question: ["a.md"],
@@ -350,7 +369,7 @@ class TestUnanswerableQuestions:
             },
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.candidate_count() == 1
         assert pool.to_dict()["summary"]["questions_not_graded"] == 1
@@ -363,18 +382,18 @@ class TestPoolDepth:
         question = factual()
         dataset = make_dataset(question)
         documents = [f"doc{i:02d}.md" for i in range(15)]
-        arms = arms_for(dataset, dense={question.question: documents})
+        arms = retrievals_for(dataset, dense={question.question: documents})
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == documents[:POOL_DEPTH]
 
     def test_a_shallower_depth_is_recorded_rather_than_silent(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md", "b.md", "c.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md", "b.md", "c.md"]})
 
-        pool = build_pool(arms, dataset, depth=2)
+        pool = build_pool_from_retrievals(arms, dataset, depth=2)
 
         assert pool.gradeable[0].documents == ["a.md", "b.md"]
         assert pool.to_dict()["provenance"]["pool_depth"] == 2
@@ -389,10 +408,10 @@ class TestPoolDepth:
         """
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md", "b.md", "c.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md", "b.md", "c.md"]})
 
         with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
-            build_pool(arms, dataset, depth=3)
+            build_pool_from_retrievals(arms, dataset, depth=3)
 
         assert "depth 3," in caplog.text
         assert f"pooling depth of {POOL_DEPTH}" in caplog.text
@@ -401,10 +420,10 @@ class TestPoolDepth:
         """The warning has to stay rare, or it stops being read."""
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md"]})
 
         with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
-            build_pool(arms, dataset)
+            build_pool_from_retrievals(arms, dataset)
 
         assert caplog.records == []
 
@@ -480,10 +499,10 @@ class TestReproducibility:
             "sparse": {question.question: ["c.md", "a.md"]},
         }
 
-        first = build_pool(arms_for(dataset, **scripts), dataset).save(
+        first = build_pool_from_retrievals(retrievals_for(dataset, **scripts), dataset).save(
             tmp_path / "one.json"
         )
-        second = build_pool(arms_for(dataset, **scripts), dataset).save(
+        second = build_pool_from_retrievals(retrievals_for(dataset, **scripts), dataset).save(
             tmp_path / "two.json"
         )
 
@@ -503,8 +522,8 @@ class TestReproducibility:
             "sparse": {question.question: ["tied.md", "c.md"]},
         }
 
-        forward = build_pool(arms_for(dataset, **scripts), dataset)
-        backward = build_pool(list(reversed(arms_for(dataset, **scripts))), dataset)
+        forward = build_pool_from_retrievals(retrievals_for(dataset, **scripts), dataset)
+        backward = build_pool_from_retrievals(list(reversed(retrievals_for(dataset, **scripts))), dataset)
 
         def view(pool):
             return [
@@ -517,20 +536,20 @@ class TestReproducibility:
     def test_the_sheet_is_ordered_by_document_name(self):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={question.question: ["zeta.md"]},
             sparse={question.question: ["alpha.md"]},
         )
 
-        pool = build_pool(arms, dataset)
+        pool = build_pool_from_retrievals(arms, dataset)
 
         assert pool.gradeable[0].documents == ["alpha.md", "zeta.md"]
 
     def test_provenance_records_the_chunking_regime_the_pool_was_built_under(self):
         dataset = make_dataset(factual())
 
-        provenance = build_pool([], dataset).to_dict()["provenance"]
+        provenance = build_pool_from_retrievals([], dataset).to_dict()["provenance"]
 
         assert provenance["chunk_size_chars"] == 1200
         assert provenance["chunk_overlap_chars"] == 200
@@ -541,9 +560,9 @@ class TestPersistence:
     def test_a_saved_pool_round_trips_as_json(self, tmp_path):
         question = factual()
         dataset = make_dataset(question)
-        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+        arms = retrievals_for(dataset, dense={question.question: ["a.md"]})
 
-        path = build_pool(arms, dataset).save(tmp_path / "pool.json")
+        path = build_pool_from_retrievals(arms, dataset).save(tmp_path / "pool.json")
         loaded = CandidatePool.load(path)
 
         assert loaded["questions"][0]["candidates"][0]["source_document"] == "a.md"
@@ -555,12 +574,12 @@ class TestPersistence:
     def test_the_summary_counts_what_the_sitting_will_cost(self, tmp_path):
         one, two = factual("factual-01"), factual("factual-02", "Another question?")
         dataset = make_dataset(one, two)
-        arms = arms_for(
+        arms = retrievals_for(
             dataset,
             dense={one.question: ["a.md", "b.md"], two.question: ["b.md"]},
         )
 
-        summary = build_pool(arms, dataset).to_dict()["summary"]
+        summary = build_pool_from_retrievals(arms, dataset).to_dict()["summary"]
 
         assert summary["questions_to_grade"] == 2
         assert summary["grading_decisions"] == 3
