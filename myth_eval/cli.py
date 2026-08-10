@@ -40,7 +40,7 @@ def build_live_arms(
     Imports the heavy stack lazily, so importing this module stays cheap.
     """
     from myth_eval.arms import build_arms
-    from myth_eval.index import DEFAULT_EMBEDDING_MODEL, index_root, repository_root
+    from myth_eval.index import DEFAULT_EMBEDDING_MODEL, index_root
     from myth_eval.nltk_resources import ensure_nltk_resources
     from myth_eval.retrieval import DenseRetrieverAdapter, SparseRetrieverAdapter
 
@@ -49,21 +49,18 @@ def build_live_arms(
     # hybrid zero for reasons unrelated to retrieval quality.
     ensure_nltk_resources()
 
-    import os
+    # Resolve the store once and both open and report that same path, so the
+    # log cannot name a directory other than the one actually read.
+    store = index_root()
 
-    previous = Path.cwd()
-    try:
-        # RAGSystem resolves its store relative to the working directory.
-        os.chdir(repository_root())
-        from rag_system import RAGSystem
+    from rag_system import RAGSystem
 
-        system = RAGSystem(
-            embedding_model_name=embedding_model or DEFAULT_EMBEDDING_MODEL,
-        )
-    finally:
-        os.chdir(previous)
+    system = RAGSystem(
+        embedding_model_name=embedding_model or DEFAULT_EMBEDDING_MODEL,
+        store_dir=str(store),
+    )
 
-    logger.info("Index in use: %s", index_root())
+    logger.info("Index in use: %s", store)
 
     dense = DenseRetrieverAdapter(system.agentic_rag.dense)
     sparse_agent = system.agentic_rag.sparse

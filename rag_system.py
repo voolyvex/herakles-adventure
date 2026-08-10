@@ -71,15 +71,21 @@ class RAGSystem:
         chunk_size_chars: int = 1200,
         chunk_overlap_chars: int = 200,
         force_reindex: bool = False,
+        store_dir: Optional[str] = None,
     ):
         """
         Initialize the RAG system with lore directories and model configuration.
-        
+
         Args:
             lore_entities_dir: Directory containing entity metadata files
             lore_chunks_dir: Directory containing lore text chunks
             embedding_model_name: Name of the sentence transformer model to use
             collection_name: Name of the ChromaDB collection to use/create
+            store_dir: Directory holding the vector store and its chunk cache.
+                Defaults to "chroma_db" relative to the working directory, which
+                is where the store has always landed. Callers that need the
+                store in a known place should say so rather than relying on
+                where the process happened to start.
         """
         logging.info("Initializing RAG System...")
         
@@ -90,6 +96,10 @@ class RAGSystem:
         self.embedding_model_name = embedding_model_name
         self.chunk_size_chars = max(300, chunk_size_chars)
         self.chunk_overlap_chars = max(0, min(chunk_overlap_chars, self.chunk_size_chars // 2))
+        # Resolve the store location once, here, so every later access reads a
+        # single absolute path rather than re-resolving a relative literal
+        # against whatever the working directory happens to be at the time.
+        self.store_dir = Path(store_dir).expanduser().resolve() if store_dir else Path("chroma_db").resolve()
         # Increment when chunking/indexing schema changes
         self._index_version = 2
         
@@ -122,8 +132,8 @@ class RAGSystem:
         
         # Initialize ChromaDB client
         try:
-            self.chroma_client = chromadb.PersistentClient(path="chroma_db")
-            logging.info("Initialized ChromaDB client")
+            self.chroma_client = chromadb.PersistentClient(path=str(self.store_dir))
+            logging.info(f"Initialized ChromaDB client at {self.store_dir}")
         except Exception as e:
             logging.error(f"Failed to initialize ChromaDB client: {e}")
             raise
@@ -182,8 +192,12 @@ class RAGSystem:
         return self.embedding_model.encode(query, **kwargs).tolist()
 
     def _get_lore_cache_path(self) -> Path:
-        """Get the path to the lore chunks cache file."""
-        return Path("chroma_db") / "lore_cache.json"
+        """Get the path to the lore chunks cache file.
+
+        The cache lives inside the store directory so that a store and the
+        chunking it was built from cannot be separated.
+        """
+        return self.store_dir / "lore_cache.json"
 
     def _is_cache_fresh(self) -> bool:
         """Check if the lore cache is fresher than all source lore files.

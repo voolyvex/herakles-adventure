@@ -1,15 +1,14 @@
-"""Explicit index building with a pinned working directory.
+"""Explicit index building at a stated location.
 
 Two problems this fixes.
 
-**The store lands wherever the process started.** ``RAGSystem`` constructs
-``chromadb.PersistentClient(path="chroma_db")`` and writes its chunk cache to
-``Path("chroma_db")`` — both relative to the current working directory. Running
-the app from the repository root and the evaluation from anywhere else produces
-two unrelated vector stores, and CI would build one and read another.
-:func:`index_root` resolves that path against the repository root instead, so
-the store is in one predictable place regardless of where the command was
-invoked.
+**The store must land in one predictable place.** :func:`index_root` resolves
+the store directory against the repository root — honouring an explicit
+override or ``MYTH_INDEX_DIR`` — and :func:`build_index` passes that resolved
+path to ``RAGSystem``. Because the location is stated rather than inferred from
+the working directory, running the app from the repository root and the
+evaluation from anywhere else reach the same store, and CI cannot build one and
+read another.
 
 **A re-chunk silently reuses a stale index.** ``RAGSystem._is_cache_fresh``
 compares the cache's mtime against corpus file mtimes only. Changing
@@ -94,8 +93,8 @@ class IndexKey:
 def repository_root() -> Path:
     """The repository root, resolved from this file's location.
 
-    Deliberately independent of the current working directory: that is the
-    whole point of pinning.
+    Deliberately independent of the current working directory: every path this
+    module resolves is anchored here so that none of them shift with it.
     """
     return Path(__file__).resolve().parent.parent
 
@@ -244,32 +243,25 @@ def build_index(
 
     target.mkdir(parents=True, exist_ok=True)
 
-    # RAGSystem resolves "chroma_db" and its lore cache relative to the process
-    # working directory. Pinning the working directory for the duration of the
-    # build is what makes the store land predictably without modifying
-    # RAGSystem itself.
-    previous_cwd = Path.cwd()
     stale_key_path = target / KEY_FILENAME
     if stale_key_path.exists():
         # Remove first: if the build fails part-way, a stale key must not be
         # left claiming the half-built index is current.
         stale_key_path.unlink()
 
-    try:
-        os.chdir(repository_root())
-        from rag_system import RAGSystem  # noqa: PLC0415 — deliberately deferred
+    from rag_system import RAGSystem  # noqa: PLC0415 — deliberately deferred
 
-        system = RAGSystem(
-            lore_chunks_dir=str(corpus_dir()),
-            embedding_model_name=embedding_model,
-            collection_name=collection_name,
-            chunk_size_chars=chunk_size_chars,
-            chunk_overlap_chars=chunk_overlap_chars,
-            force_reindex=True,
-        )
-        chunk_count = len(getattr(system, "lore_chunks", []) or [])
-    finally:
-        os.chdir(previous_cwd)
+    # The store location is stated, not inferred from the working directory.
+    system = RAGSystem(
+        lore_chunks_dir=str(corpus_dir()),
+        embedding_model_name=embedding_model,
+        collection_name=collection_name,
+        chunk_size_chars=chunk_size_chars,
+        chunk_overlap_chars=chunk_overlap_chars,
+        force_reindex=True,
+        store_dir=str(target),
+    )
+    chunk_count = len(getattr(system, "lore_chunks", []) or [])
 
     write_index_key(key, target)
     logger.info("Built index at %s (%s), %d chunks", target, key.fingerprint(), chunk_count)
