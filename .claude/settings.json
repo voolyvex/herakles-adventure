@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(uvx ruff:*)",
+      "Bash(make lint)",
+      "Bash(make fmt)",
+      "Bash(make hooks)"
+    ]
+  }
+}
