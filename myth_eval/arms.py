@@ -30,9 +30,16 @@ __all__ = [
     "RerankedArm",
     "build_arms",
     "ARM_NAMES",
+    "DENSE",
+    "SPARSE",
 ]
 
+# The canonical reporting order, and the single source of every arm name. The
+# four below are unpacked from it rather than written out again, so no arm name
+# is spelled twice in the codebase. The unpacking is positional: reordering the
+# tuple reorders these bindings with it, so keep the two in step.
 ARM_NAMES = ("dense", "sparse", "hybrid", "hybrid_rerank")
+DENSE, SPARSE, HYBRID, HYBRID_RERANK = ARM_NAMES
 
 # Candidate fan-out per sub-arm before fusion. Mirrors the orchestrator's
 # hard-coded 40. Parameterising the orchestrator's own pools is out of scope
@@ -80,7 +87,7 @@ class HybridArm:
         self,
         dense: Retriever,
         sparse: Optional[Retriever],
-        name: str = "hybrid",
+        name: str = HYBRID,
         fanout: int = FANOUT,
     ) -> None:
         self._dense = dense
@@ -99,17 +106,37 @@ class HybridArm:
         )
         return _deduplicate(list(dense_hits) + list(sparse_hits))
 
+    def fused_candidates(
+        self,
+        query: str,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[RetrievedItem]:
+        """The merged dense and sparse pool, score-ordered and untruncated.
+
+        This is the whole of the fusion rule, and the only place it lives. The
+        reranked arm needs the pool deeper than ``retrieve`` returns it and
+        without ranks reassigned, so depth is the caller's business: slice what
+        you need. Ranks are assigned by whoever returns items to a caller.
+
+        Args:
+            query: The natural-language query.
+            filters: Optional metadata filter, passed to both sub-arms.
+
+        Returns:
+            Every deduplicated candidate, ordered by raw score, best first.
+        """
+        candidates = self._candidates(query, filters)
+        # The defective sort, preserved on purpose: cosine similarity and BM25
+        # are not on a common scale.
+        return sorted(candidates, key=lambda item: item.score, reverse=True)
+
     def retrieve(
         self,
         query: str,
         k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[RetrievedItem]:
-        candidates = self._candidates(query, filters)
-        # The defective sort, preserved on purpose: cosine similarity and BM25
-        # are not on a common scale.
-        fused = sorted(candidates, key=lambda item: item.score, reverse=True)
-        return _renumber(fused[:k])
+        return _renumber(self.fused_candidates(query, filters)[:k])
 
 
 class RerankedArm:
@@ -124,7 +151,7 @@ class RerankedArm:
         self,
         hybrid: HybridArm,
         reranker: Any,
-        name: str = "hybrid_rerank",
+        name: str = HYBRID_RERANK,
         pool_size: int = RERANK_POOL,
     ) -> None:
         self._hybrid = hybrid
@@ -138,9 +165,7 @@ class RerankedArm:
         k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[RetrievedItem]:
-        candidates = self._hybrid._candidates(query, filters)
-        pool = sorted(candidates, key=lambda item: item.score, reverse=True)
-        pool = pool[: self._pool_size]
+        pool = self._hybrid.fused_candidates(query, filters)[: self._pool_size]
         if not pool:
             return []
 

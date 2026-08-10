@@ -11,9 +11,10 @@ import json
 
 import pytest
 
-from myth_eval.arms import HybridArm, RerankedArm, build_arms
+from myth_eval.arms import ARM_NAMES, HybridArm, RerankedArm, build_arms
 from myth_eval.dataset import Dataset, Question, Stratum
 from myth_eval.fakes import FakeRetriever
+from myth_eval.retrieval import adapt_stack
 from myth_eval.runner import (
     GATE_K,
     K_VALUES,
@@ -87,7 +88,9 @@ def weak_arm() -> FakeRetriever:
 
 
 class TestTheRunnerVisitsEveryArm:
-    def test_every_configured_arm_produces_a_result(self, dataset, perfect_arm, weak_arm):
+    def test_every_configured_arm_produces_a_result(
+        self, dataset, perfect_arm, weak_arm
+    ):
         results = run_evaluation([perfect_arm, weak_arm], dataset)
 
         assert [arm.name for arm in results.arms] == ["perfect", "weak"]
@@ -101,17 +104,12 @@ class TestTheRunnerVisitsEveryArm:
 
     def test_the_four_arm_matrix_runs(self, dataset):
         """dense, sparse, hybrid, hybrid_rerank — the arms this ticket covers."""
-        arms = [FakeRetriever(name) for name in ("dense", "sparse", "hybrid", "hybrid_rerank")]
+        arms = [FakeRetriever(name) for name in ARM_NAMES]
 
         results = run_evaluation(arms, dataset)
 
         assert len(results.arms) == 4
-        assert [a.name for a in results.arms] == [
-            "dense",
-            "sparse",
-            "hybrid",
-            "hybrid_rerank",
-        ]
+        assert [a.name for a in results.arms] == list(ARM_NAMES)
 
 
 class TestReportedMetrics:
@@ -146,7 +144,9 @@ class TestReportedMetrics:
         assert results.gate_metric == f"ndcg@{GATE_K}"
         assert GATE_K == 5
 
-    def test_the_winning_configuration_is_identified(self, dataset, perfect_arm, weak_arm):
+    def test_the_winning_configuration_is_identified(
+        self, dataset, perfect_arm, weak_arm
+    ):
         results = run_evaluation([weak_arm, perfect_arm], dataset)
 
         assert results.best_arm() == "perfect"
@@ -218,7 +218,9 @@ class TestUnanswerableStratum:
             "unanswerable_precision"
         ] == pytest.approx(0.0)
 
-    def test_the_unanswerable_stratum_does_not_drag_down_ndcg(self, dataset, perfect_arm):
+    def test_the_unanswerable_stratum_does_not_drag_down_ndcg(
+        self, dataset, perfect_arm
+    ):
         """nDCG is undefined for a question with no relevant document, so
         averaging a zero in from that stratum would understate every arm."""
         result = run_evaluation([perfect_arm], dataset).arms[0]
@@ -334,7 +336,120 @@ class TestHybridArmFusion:
         assert [item.rank for item in results] == list(range(len(results)))
 
 
+class TestTheFusedCandidatePool:
+    """Fusion through the hybrid arm's own interface, with no reranker in sight.
+
+    The reranked arm needs this pool unsorted-by-rank and deeper than what a
+    caller of ``retrieve`` gets back. It used to reach into a private attribute
+    and re-sort, which put the fusion rule — and the score-scale defect it
+    carries — in two places at once.
+    """
+
+    def test_the_pool_is_ordered_by_raw_score(self):
+        """The preserved defect, asserted directly: BM25 outranks cosine.
+
+        14.2 beats 0.95 because the two are not on a common scale, not because
+        the BM25 hit is more relevant. See this module's docstring in arms.py.
+        """
+        dense = FakeRetriever(
+            "dense", responses={"q": ["cosine.md"]}, scores={"q": [0.95]}
+        )
+        sparse = FakeRetriever(
+            "sparse", responses={"q": ["bm25_noise.md"]}, scores={"q": [14.2]}
+        )
+
+        pool = HybridArm(dense, sparse).fused_candidates("q")
+
+        assert [item.source_document for item in pool] == [
+            "bm25_noise.md",
+            "cosine.md",
+        ]
+
+    def test_the_pool_is_not_truncated_to_a_retrieval_depth(self):
+        """Deeper than ``retrieve`` returns — that is why it exists."""
+        dense = FakeRetriever(
+            "dense", responses={"q": [f"d{i:02d}.md" for i in range(12)]}
+        )
+        arm = HybridArm(dense, None)
+
+        assert len(arm.fused_candidates("q")) == 12
+        assert len(arm.retrieve("q", k=5)) == 5
+
+    def test_the_pool_deduplicates_across_both_sub_arms(self):
+        dense = FakeRetriever("dense", responses={"q": ["same.md"]})
+        sparse = FakeRetriever("sparse", responses={"q": ["same.md"]})
+
+        assert len(HybridArm(dense, sparse).fused_candidates("q")) == 1
+
+    def test_retrieve_returns_the_head_of_the_same_pool(self):
+        """One fusion rule: ``retrieve`` is the pool, sliced and renumbered."""
+        dense = FakeRetriever(
+            "dense", responses={"q": ["a.md", "b.md"]}, scores={"q": [0.9, 0.8]}
+        )
+        sparse = FakeRetriever("sparse", responses={"q": ["c.md"]}, scores={"q": [7.0]})
+        arm = HybridArm(dense, sparse)
+
+        pool = arm.fused_candidates("q")
+        retrieved = arm.retrieve("q", k=2)
+
+        assert [item.source_document for item in retrieved] == [
+            item.source_document for item in pool[:2]
+        ]
+        assert [item.rank for item in retrieved] == [0, 1]
+
+    def test_the_pool_survives_sparse_being_unavailable(self):
+        dense = FakeRetriever("dense", responses={"q": ["a.md"]})
+
+        pool = HybridArm(dense, None).fused_candidates("q")
+
+        assert [item.source_document for item in pool] == ["a.md"]
+
+
 class TestRerankedArm:
+    def test_it_takes_its_pool_through_the_hybrid_arms_interface(self):
+        """Through ``fused_candidates``, and never past it.
+
+        The private ``_candidates`` is made to fail here, so reaching for it —
+        which is what this arm used to do — cannot pass silently.
+        """
+
+        class RecordingHybrid(HybridArm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.pool_requests = 0
+                self._inside_fusion = False
+
+            def fused_candidates(self, query, filters=None):
+                self.pool_requests += 1
+                self._inside_fusion = True
+                try:
+                    return super().fused_candidates(query, filters)
+                finally:
+                    self._inside_fusion = False
+
+            def _candidates(self, query, filters):
+                # Legitimate when fusion itself is asking; a reach past the
+                # interface otherwise, which is what this arm used to do.
+                if not self._inside_fusion:
+                    raise AssertionError(
+                        "the reranked arm must not reach past fused_candidates"
+                    )
+                return super()._candidates(query, filters)
+
+        class FakeReranker:
+            def rerank(self, query, candidates, top_k=5):
+                return [
+                    {**c, "rerank_score": 1.0 - i}
+                    for i, c in enumerate(candidates[:top_k])
+                ]
+
+        dense = FakeRetriever("dense", responses={"q": ["a.md"]})
+        hybrid = RecordingHybrid(dense, None)
+
+        RerankedArm(hybrid, FakeReranker()).retrieve("q", k=5)
+
+        assert hybrid.pool_requests == 1
+
     def test_the_reranker_reorders_the_fused_pool(self):
         class FakeReranker:
             def rerank(self, query, candidates, top_k=5):
@@ -345,7 +460,9 @@ class TestRerankedArm:
                 ]
 
         dense = FakeRetriever("dense", responses={"q": ["a.md"]}, scores={"q": [0.9]})
-        sparse = FakeRetriever("sparse", responses={"q": ["b.md"]}, scores={"q": [12.0]})
+        sparse = FakeRetriever(
+            "sparse", responses={"q": ["b.md"]}, scores={"q": [12.0]}
+        )
         arm = RerankedArm(HybridArm(dense, sparse), FakeReranker())
 
         results = arm.retrieve("q", k=5)
@@ -383,7 +500,7 @@ class TestBuildArms:
             FakeRetriever("dense"), FakeRetriever("sparse"), FakeReranker()
         )
 
-        assert [a.name for a in arms] == ["dense", "sparse", "hybrid", "hybrid_rerank"]
+        assert [a.name for a in arms] == list(ARM_NAMES)
 
     def test_sparse_absence_drops_that_arm_rather_than_failing(self):
         arms = build_arms(FakeRetriever("dense"), None, None)
@@ -391,12 +508,117 @@ class TestBuildArms:
         assert [a.name for a in arms] == ["dense", "hybrid"]
 
 
+class TestBothPathsShareOneAssembly:
+    """The claim ``--fake`` makes: identical code path, assembly included."""
+
+    def test_the_scripted_matrix_is_assembled_by_build_arms(self, dataset):
+        """Same names, same types, same order as the live matrix would give.
+
+        The scripted path used to hand-write these four arms, agreeing with
+        ``build_arms`` only because the same literals appeared in both places.
+        """
+        from myth_eval.cli import build_fake_arms
+
+        arms = build_fake_arms(dataset)
+
+        assert [arm.name for arm in arms] == list(ARM_NAMES)
+        assert isinstance(arms[2], HybridArm)
+        assert isinstance(arms[3], RerankedArm)
+
+    def test_the_scripted_matrix_still_retrieves(self, dataset):
+        """Assembly changed; behaviour did not."""
+        from myth_eval.cli import build_fake_arms
+
+        results = run_evaluation(build_fake_arms(dataset), dataset)
+
+        assert [arm.name for arm in results.arms] == list(ARM_NAMES)
+
+
+class TestAdaptingARetrievalStack:
+    """The adapter seam the live command sits on, exercised without the stack.
+
+    ``adapt_stack`` takes anything exposing ``dense``, ``sparse`` and
+    ``reranker``, which is all the command ever needed from ``RAGSystem``. That
+    is what puts the refusal below within reach of a test that loads no models.
+    """
+
+    class Stack:
+        def __init__(self, dense=None, sparse=None, reranker=None):
+            self.dense = dense
+            self.sparse = sparse
+            self.reranker = reranker
+
+    def test_it_refuses_when_the_sparse_retriever_failed_to_initialise(self):
+        """The harness's loudest safety behaviour, finally executed.
+
+        Silently dropping sparse here would score the sparse and hybrid arms
+        zero for reasons unrelated to retrieval quality, and that number would
+        land in the committed baseline. Refusing is the whole point.
+        """
+        stack = self.Stack(dense=object(), sparse=None, reranker=object())
+
+        with pytest.raises(RuntimeError, match="silently score them zero") as raised:
+            adapt_stack(stack)
+
+        assert "sparse" in str(raised.value).lower()
+
+    def test_the_refusal_reaches_the_command_rather_than_scoring_zeros(
+        self, dataset, tmp_path
+    ):
+        """The refusal has to escape the whole command, not just the adapter.
+
+        Were it swallowed anywhere above, the run would proceed with a matrix
+        missing its sparse and hybrid arms and write that to the results file —
+        which is the exact silent degradation the guard exists to prevent.
+        """
+        from myth_eval import cli
+
+        output = tmp_path / "results.json"
+        # Its own dataset, so the test does not depend on what is committed.
+        dataset_path = tmp_path / "questions.json"
+        dataset.save(dataset_path)
+
+        # Stand in for the live stack at the seam, so no index is needed.
+        def build(embedding_model=None, with_reranker=True):
+            return adapt_stack(
+                self.Stack(dense=object(), sparse=None, reranker=None),
+                with_reranker,
+            )
+
+        original = cli.build_live_arms
+        cli.build_live_arms = build
+        try:
+            with pytest.raises(RuntimeError):
+                cli.main(["--dataset", str(dataset_path), "--output", str(output)])
+        finally:
+            cli.build_live_arms = original
+
+        assert not output.exists(), "a refused run must write no results file"
+
+    def test_a_whole_stack_adapts_to_the_protocol(self):
+        reranker = object()
+        stack = self.Stack(dense=object(), sparse=object(), reranker=reranker)
+
+        dense, sparse, adapted_reranker = adapt_stack(stack)
+
+        assert (dense.name, sparse.name) == ("dense", "sparse")
+        assert adapted_reranker is reranker
+
+    def test_dropping_the_reranker_leaves_the_other_two_adapted(self):
+        stack = self.Stack(dense=object(), sparse=object(), reranker=object())
+
+        dense, sparse, reranker = adapt_stack(stack, with_reranker=False)
+
+        assert reranker is None
+        assert (dense.name, sparse.name) == ("dense", "sparse")
+
+
 class TestNoHeavyDependencies:
     def test_the_runner_test_suite_loads_no_models_or_stores(self):
         """The property that makes Seam 2 useful."""
         import sys
 
-        for forbidden in ("chromadb", "sentence_transformers", "flashrank"):
+        for forbidden in ("torch", "chromadb", "sentence_transformers", "flashrank"):
             assert forbidden not in sys.modules, (
                 f"{forbidden} was imported; the runner suite must stay free of it"
             )

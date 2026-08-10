@@ -13,6 +13,11 @@ which is the only place in the harness that imports torch, chromadb or the
 agents. Everything above it — runner, metrics, dataset, arms — is driven through
 the retrieval protocol, so ``--fake`` runs the identical code path against
 scripted retrievers in milliseconds.
+
+Identical is meant literally, assembly included: both paths hand their adapters
+to :func:`myth_eval.arms.build_arms`, which is the only thing that decides what
+the matrix contains and what each arm is called. The one choice left to this
+module is which adapters to supply — the live stack, or the scripted ones.
 """
 
 from __future__ import annotations
@@ -49,7 +54,7 @@ def build_live_arms(
     from myth_eval.arms import build_arms
     from myth_eval.index import DEFAULT_EMBEDDING_MODEL, index_root
     from myth_eval.nltk_resources import ensure_nltk_resources
-    from myth_eval.retrieval import DenseRetrieverAdapter, SparseRetrieverAdapter
+    from myth_eval.retrieval import adapt_stack
 
     # Fail loudly here rather than silently losing the sparse arm: RAGSystem
     # swallows a tokeniser failure into a warning, which would score sparse and
@@ -69,23 +74,20 @@ def build_live_arms(
 
     logger.info("Index in use: %s", store)
 
-    dense = DenseRetrieverAdapter(system.agentic_rag.dense)
-    sparse_agent = system.agentic_rag.sparse
-    if sparse_agent is None:
-        raise RuntimeError(
-            "The sparse retriever failed to initialise, so the sparse and "
-            "hybrid arms cannot be measured. Refusing to produce results that "
-            "would silently score them zero."
-        )
-    sparse = SparseRetrieverAdapter(sparse_agent)
-
-    reranker = system.agentic_rag.reranker if with_reranker else None
+    # Adapting the stack is where the refusal lives, and it needs none of the
+    # heavy machinery above — which is why it sits in `retrieval` under test.
+    dense, sparse, reranker = adapt_stack(system.agentic_rag, with_reranker)
     return build_arms(dense, sparse, reranker)
 
 
 def build_fake_arms(dataset: Dataset) -> List[Any]:
-    """A scripted four-arm matrix, for exercising the command with no index."""
-    from myth_eval.arms import HybridArm, RerankedArm
+    """A scripted four-arm matrix, for exercising the command with no index.
+
+    Assembly is :func:`myth_eval.arms.build_arms`, the same function the live
+    path uses. Only the adapters differ, which is what makes the scripted run a
+    genuine rehearsal of the real one rather than a lookalike.
+    """
+    from myth_eval.arms import DENSE, SPARSE, build_arms
     from myth_eval.fakes import FakeRetriever
 
     responses = {}
@@ -95,17 +97,17 @@ def build_fake_arms(dataset: Dataset) -> List[Any]:
         else:
             responses[question.question] = sorted(question.relevance)
 
-    dense = FakeRetriever("dense", responses=responses)
-    sparse = FakeRetriever("sparse", responses=responses)
-    hybrid = HybridArm(dense, sparse)
-
     class PassthroughReranker:
         def rerank(self, query, candidates, top_k=5):
             return [
                 {**c, "rerank_score": 1.0 - i} for i, c in enumerate(candidates[:top_k])
             ]
 
-    return [dense, sparse, hybrid, RerankedArm(hybrid, PassthroughReranker())]
+    return build_arms(
+        FakeRetriever(DENSE, responses=responses),
+        FakeRetriever(SPARSE, responses=responses),
+        PassthroughReranker(),
+    )
 
 
 def _print_summary(results: EvaluationResults) -> None:
