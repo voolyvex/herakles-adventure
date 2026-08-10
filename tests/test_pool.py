@@ -13,6 +13,8 @@ the generator. These tests script their responses explicitly.
 
 from __future__ import annotations
 
+import logging
+
 from myth_eval.dataset import Dataset, Question, Stratum
 from myth_eval.fakes import FakeRetriever
 from myth_eval.pool import (
@@ -143,7 +145,7 @@ class TestDeduplication:
 
         pool = build_pool(arms, dataset)
 
-        assert pool.gradeable[0].documents == ["same.md", "other.md"]
+        assert pool.gradeable[0].documents == ["other.md", "same.md"]
 
     def test_deduplication_records_every_arm_that_found_the_document(self):
         question = factual()
@@ -253,6 +255,34 @@ class TestShapedForGrading:
         assert "score" not in candidate
         assert "best_rank" not in candidate
 
+    def test_the_sheet_ordering_carries_no_rank_information(self):
+        """Omitting ``best_rank`` is not enough; the sequence can leak it too.
+
+        The arm ranks b(0), a(1), c(2). A sheet sorted best-first would emit
+        exactly that sequence, so ordinal position on the page *would be* the
+        rank — the property the graded view claims not to have. Asserting the
+        key is absent does not catch that, which is how this survived review;
+        asserting the two orders disagree does.
+        """
+        question = factual()
+        dataset = make_dataset(question)
+        arms = arms_for(dataset, dense={question.question: ["b.md", "a.md", "c.md"]})
+
+        emitted = build_pool(arms, dataset).to_dict()
+
+        graded = [c["source_document"] for c in emitted["questions"][0]["candidates"]]
+        assert graded == ["a.md", "b.md", "c.md"]
+
+        # The rank order is genuinely different, so the assertion above is
+        # discriminating rather than coincidentally satisfied.
+        attributed = emitted["diagnostics"]["attribution"][0]["candidates"]
+        by_rank = [
+            c["source_document"]
+            for c in sorted(attributed, key=lambda c: c["best_rank"])
+        ]
+        assert by_rank == ["b.md", "a.md", "c.md"]
+        assert graded != by_rank
+
     def test_arm_attribution_survives_as_a_diagnostic(self):
         question = factual()
         dataset = make_dataset(question)
@@ -349,6 +379,35 @@ class TestPoolDepth:
         assert pool.gradeable[0].documents == ["a.md", "b.md"]
         assert pool.to_dict()["provenance"]["pool_depth"] == 2
 
+    def test_a_shallow_pool_warns_that_it_does_not_conform(self, caplog):
+        """A shallow pool is legitimate; being mistaken for the real one is not.
+
+        Everything outside the pool scores zero, so grading a shallow pool
+        permanently zeroes documents a conforming pool would have carried —
+        and no later run can detect it. The provenance field records the
+        depth, but a field nobody reads is thin protection.
+        """
+        question = factual()
+        dataset = make_dataset(question)
+        arms = arms_for(dataset, dense={question.question: ["a.md", "b.md", "c.md"]})
+
+        with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
+            build_pool(arms, dataset, depth=3)
+
+        assert "3" in caplog.text
+        assert str(POOL_DEPTH) in caplog.text
+
+    def test_pooling_at_the_full_depth_says_nothing(self, caplog):
+        """The warning has to stay rare, or it stops being read."""
+        question = factual()
+        dataset = make_dataset(question)
+        arms = arms_for(dataset, dense={question.question: ["a.md"]})
+
+        with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
+            build_pool(arms, dataset)
+
+        assert caplog.records == []
+
     def test_a_deeper_retrieval_run_does_not_widen_the_pool(self, tmp_path):
         """--k sets retrieval depth; it must not push the pool past ten."""
         from myth_eval.cli import main
@@ -380,6 +439,40 @@ class TestPoolDepth:
         assert exit_code == 0
         assert emitted["provenance"]["pool_depth"] == POOL_DEPTH
         assert len(emitted["questions"][0]["candidates"]) == POOL_DEPTH
+
+    def test_a_shallower_retrieval_run_pools_shallow_and_says_so(
+        self, tmp_path, caplog
+    ):
+        """--k below the pooling depth is allowed through, but not quietly."""
+        from myth_eval.cli import main
+
+        question = factual()
+        dataset = make_dataset(question)
+        question.relevance = {f"doc{i:02d}.md": 2 for i in range(15)}
+        dataset_path = tmp_path / "questions.json"
+        dataset.save(dataset_path)
+
+        pool_path = tmp_path / "pool.json"
+        with caplog.at_level(logging.WARNING, logger="myth_eval.pool"):
+            exit_code = main(
+                [
+                    "--fake",
+                    "--k",
+                    "3",
+                    "--dataset",
+                    str(dataset_path),
+                    "--output",
+                    str(tmp_path / "results.json"),
+                    "--pool-output",
+                    str(pool_path),
+                ]
+            )
+
+        emitted = CandidatePool.load(pool_path)
+        assert exit_code == 0
+        assert emitted["provenance"]["pool_depth"] == 3
+        assert len(emitted["questions"][0]["candidates"]) == 3
+        assert "3" in caplog.text
 
 
 class TestReproducibility:
@@ -425,7 +518,7 @@ class TestReproducibility:
 
         assert view(forward) == view(backward)
 
-    def test_ties_on_rank_break_on_document_name(self):
+    def test_the_sheet_is_ordered_by_document_name(self):
         question = factual()
         dataset = make_dataset(question)
         arms = arms_for(

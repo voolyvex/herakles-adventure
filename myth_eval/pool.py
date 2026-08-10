@@ -27,6 +27,13 @@ bias pooling exists to remove. Arm attribution is computed, because it is a
 genuinely useful diagnostic, but it is kept in a separate ``diagnostics``
 section rather than sitting next to the text a human is reading.
 
+Blindness here means the *ordering* too, not just the absent key. The graded
+candidate list is sorted by source document alone, so where a candidate sits on
+the page says nothing about how any arm ranked it. Sorting best-first would put
+the rank back in as ordinal position and hand the labeller the system's
+favourites to read first — which is also the comparison the rubric forbids,
+since it asks for each candidate to be graded independently of the others.
+
 Unanswerable questions are not emitted as grading tasks at all. The rubric is
 explicit that they are skipped and that writing 0s into their relevance map
 misrepresents "grading does not apply here" as "grading happened here". Their
@@ -37,6 +44,7 @@ returns for a question with no answer is worth seeing.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -44,7 +52,10 @@ from typing import Any, Dict, List, Optional, Sequence
 from myth_eval.dataset import GRADE_LABELS, Dataset, Question
 from myth_eval.runner import POOL_DEPTH, ArmResult
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
+    "EXCERPT_CHARS",
     "PooledCandidate",
     "QuestionPool",
     "CandidatePool",
@@ -68,7 +79,12 @@ GRADING_INSTRUCTIONS = (
 
 
 def default_pool_path() -> Path:
-    """The committed candidate pool file."""
+    """Where a generated candidate pool is written by default.
+
+    Not a committed file, and deliberately so: generating a real pool needs a
+    built index, and the only pool that can be produced without one comes from
+    scripted fake arms — which sitting at this path would read as genuine.
+    """
     return Path(__file__).resolve().parent.parent / "eval_data" / "candidate_pool.json"
 
 
@@ -96,8 +112,10 @@ class PooledCandidate:
         chunk_id: That chunk's identifier. Diagnostic: it lets someone trace a
             candidate back to a specific chunk, but grades never key on it.
         best_rank: The best (lowest) zero-based rank this document reached in
-            any arm. Used to order the sheet so the strongest candidates are
-            read first; deliberately excluded from the graded view.
+            any arm. Chooses which chunk supplies the excerpt, and is reported
+            under diagnostics. It orders nothing in the graded view: the sheet
+            is sorted by document name precisely so that ordinal position
+            carries no rank information.
         found_by: Which arms surfaced this document. Diagnostic only.
     """
 
@@ -297,12 +315,15 @@ def _pool_one_question(
                 existing.excerpt = _excerpt(item.text)
                 existing.chunk_id = item.chunk_id
 
-    # Best rank first so the strongest candidates are read first, with the
-    # document name breaking ties. Sorting on an explicit total order rather
-    # than dict insertion is what makes the pool reproducible run to run.
+    # Document name alone. Sorting on best rank would have put the retriever's
+    # ranking back into the sheet as ordinal position — omitting the key from
+    # the graded view moves the information into the sequence rather than
+    # removing it, and a best-first sheet invites the cross-candidate
+    # comparison the rubric forbids. source_document is the dedup key and so is
+    # already unique within a question, which keeps this a total order and the
+    # pool reproducible run to run.
     candidates = sorted(
-        merged.values(),
-        key=lambda candidate: (candidate.best_rank, candidate.source_document),
+        merged.values(), key=lambda candidate: candidate.source_document
     )
     for candidate in candidates:
         candidate.found_by.sort()
@@ -326,14 +347,28 @@ def build_pool(
         arms: The evaluated arms, carrying their retained per-question outcomes.
         dataset: The question set the arms ran over.
         depth: How deep into each arm's ranking to pool. Defaults to the
-            pooling depth the spec fixes at 10. A run retrieved shallower than
-            this pools only what it has, which the recorded ``pool_depth``
-            makes visible rather than silent.
+            pooling depth the spec fixes at 10. Pooling shallower is allowed —
+            a smoke test is a legitimate reason — but it is warned about, and
+            the recorded ``pool_depth`` keeps it visible in the artefact.
 
     Returns:
         The pool, partitioned into questions to grade and questions reported
         for diagnostics only.
     """
+    if depth < POOL_DEPTH:
+        # Not a refusal: a shallow pool is fine for a smoke test. But it must
+        # not be mistaken for the real one, because everything outside the pool
+        # scores zero — so a pool built shallow permanently zeroes documents a
+        # conforming pool would have carried, and no later run can detect it.
+        logger.warning(
+            "Pooling at depth %d, below the spec's pooling depth of %d. This "
+            "pool does not conform to the spec: documents a full-depth pool "
+            "would have contained will score zero, and nothing downstream can "
+            "detect that. Use it for a smoke test, not for grading.",
+            depth,
+            POOL_DEPTH,
+        )
+
     gradeable: List[QuestionPool] = []
     diagnostic_only: List[QuestionPool] = []
     indexed_arms = _outcomes_by_question(arms)
