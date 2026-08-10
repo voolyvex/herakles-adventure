@@ -4,6 +4,17 @@ Pooled judging. Every arm runs over the question set, the union of their top-10
 results is taken per question, deduplicated by source document, and emitted as
 one prepared labelling list. Anything outside the pool scores zero.
 
+The input is :class:`ArmRetrievals` — an arm's name and what it retrieved per
+question, and nothing else. Pooling scores nothing, so it asks for no scores:
+a caller with retrieved items in hand can build a pool without running an
+evaluation. The evaluation runner hands its own retrievals over through
+``EvaluationResults.retrievals_for_pooling``, which is how the command pools
+the run it has just done without retrieving a second time.
+
+The pooling depth lives here too, with the rule that clamps a requested
+retrieval depth to it, because how much of a run reaches a human is a pooling
+question rather than a runner or command one.
+
 Pooling is chosen over grading only the current retriever's output because the
 alternative biases the gold set toward today's system: a genuinely better
 future retriever would surface good documents nobody had labelled and be
@@ -47,13 +58,10 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from myth_eval.dataset import GRADE_LABELS, Dataset, Question
 from myth_eval.retrieval import RetrievedItem
-
-if TYPE_CHECKING:  # pragma: no cover - the wide form's types, for annotations only
-    from myth_eval.runner import ArmResult
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +72,6 @@ __all__ = [
     "PooledCandidate",
     "QuestionPool",
     "CandidatePool",
-    "build_pool",
     "build_pool_from_retrievals",
     "clamp_pool_depth",
     "default_pool_path",
@@ -108,7 +115,7 @@ def clamp_pool_depth(requested: int) -> int:
     widen the pool past it — everything outside the pool scores zero, so a pool
     wider than the spec's would grade documents a conforming pool never offers,
     and the gold sets would not be comparable. Requesting shallower is allowed:
-    ``build_pool`` warns about it rather than refusing.
+    :func:`build_pool_from_retrievals` warns about it rather than refusing.
     """
     return min(requested, POOL_DEPTH)
 
@@ -302,19 +309,6 @@ class ArmRetrievals:
     retrievals: Dict[str, List[RetrievedItem]]
 
 
-def _retrievals_from_arms(arms: Sequence["ArmResult"]) -> List[ArmRetrievals]:
-    """Narrow evaluated arms down to what pooling reads: name and retrievals."""
-    return [
-        ArmRetrievals(
-            name=arm.name,
-            retrievals={
-                outcome.question_id: list(outcome.items) for outcome in arm.outcomes
-            },
-        )
-        for arm in arms
-    ]
-
-
 def _pool_one_question(
     question: Question,
     indexed_arms: Sequence[ArmRetrievals],
@@ -384,30 +378,6 @@ def _pool_one_question(
         stratum=question.stratum,
         candidates=candidates,
     )
-
-
-def build_pool(
-    arms: Sequence["ArmResult"],
-    dataset: Dataset,
-    depth: int = POOL_DEPTH,
-) -> CandidatePool:
-    """Build the candidate pool from evaluated arms.
-
-    An adapter over :func:`build_pool_from_retrievals`: it narrows each arm to
-    the two fields pooling reads, and is here so callers holding a completed
-    evaluation need not do that themselves.
-
-    Args:
-        arms: The evaluated arms, carrying their retained per-question outcomes.
-        dataset: The question set the arms ran over.
-        depth: How deep into each arm's ranking to pool. See
-            :func:`build_pool_from_retrievals`.
-
-    Returns:
-        The pool, partitioned into questions to grade and questions reported
-        for diagnostics only.
-    """
-    return build_pool_from_retrievals(_retrievals_from_arms(arms), dataset, depth)
 
 
 def build_pool_from_retrievals(
