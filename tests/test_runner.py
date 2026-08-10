@@ -330,7 +330,102 @@ class TestHybridArmFusion:
         assert [item.rank for item in results] == list(range(len(results)))
 
 
+class TestTheFusedCandidatePool:
+    """Fusion through the hybrid arm's own interface, with no reranker in sight.
+
+    The reranked arm needs this pool unsorted-by-rank and deeper than what a
+    caller of ``retrieve`` gets back. It used to reach into a private attribute
+    and re-sort, which put the fusion rule — and the score-scale defect it
+    carries — in two places at once.
+    """
+
+    def test_the_pool_is_ordered_by_raw_score(self):
+        """The preserved defect, asserted directly: BM25 outranks cosine.
+
+        14.2 beats 0.95 because the two are not on a common scale, not because
+        the BM25 hit is more relevant. See this module's docstring in arms.py.
+        """
+        dense = FakeRetriever(
+            "dense", responses={"q": ["cosine.md"]}, scores={"q": [0.95]}
+        )
+        sparse = FakeRetriever(
+            "sparse", responses={"q": ["bm25_noise.md"]}, scores={"q": [14.2]}
+        )
+
+        pool = HybridArm(dense, sparse).fused_candidates("q")
+
+        assert [item.source_document for item in pool] == [
+            "bm25_noise.md",
+            "cosine.md",
+        ]
+
+    def test_the_pool_is_not_truncated_to_a_retrieval_depth(self):
+        """Deeper than ``retrieve`` returns — that is why it exists."""
+        dense = FakeRetriever(
+            "dense", responses={"q": [f"d{i:02d}.md" for i in range(12)]}
+        )
+        arm = HybridArm(dense, None)
+
+        assert len(arm.fused_candidates("q")) == 12
+        assert len(arm.retrieve("q", k=5)) == 5
+
+    def test_the_pool_deduplicates_across_both_sub_arms(self):
+        dense = FakeRetriever("dense", responses={"q": ["same.md"]})
+        sparse = FakeRetriever("sparse", responses={"q": ["same.md"]})
+
+        assert len(HybridArm(dense, sparse).fused_candidates("q")) == 1
+
+    def test_retrieve_returns_the_head_of_the_same_pool(self):
+        """One fusion rule: ``retrieve`` is the pool, sliced and renumbered."""
+        dense = FakeRetriever(
+            "dense", responses={"q": ["a.md", "b.md"]}, scores={"q": [0.9, 0.8]}
+        )
+        sparse = FakeRetriever("sparse", responses={"q": ["c.md"]}, scores={"q": [7.0]})
+        arm = HybridArm(dense, sparse)
+
+        pool = arm.fused_candidates("q")
+        retrieved = arm.retrieve("q", k=2)
+
+        assert [item.source_document for item in retrieved] == [
+            item.source_document for item in pool[:2]
+        ]
+        assert [item.rank for item in retrieved] == [0, 1]
+
+    def test_the_pool_survives_sparse_being_unavailable(self):
+        dense = FakeRetriever("dense", responses={"q": ["a.md"]})
+
+        pool = HybridArm(dense, None).fused_candidates("q")
+
+        assert [item.source_document for item in pool] == ["a.md"]
+
+
 class TestRerankedArm:
+    def test_it_takes_its_pool_through_the_hybrid_arms_interface(self):
+        """No private attribute, and no second sort of its own."""
+
+        class RecordingHybrid(HybridArm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.pool_requests = 0
+
+            def fused_candidates(self, query, filters=None):
+                self.pool_requests += 1
+                return super().fused_candidates(query, filters)
+
+        class FakeReranker:
+            def rerank(self, query, candidates, top_k=5):
+                return [
+                    {**c, "rerank_score": 1.0 - i}
+                    for i, c in enumerate(candidates[:top_k])
+                ]
+
+        dense = FakeRetriever("dense", responses={"q": ["a.md"]})
+        hybrid = RecordingHybrid(dense, None)
+
+        RerankedArm(hybrid, FakeReranker()).retrieve("q", k=5)
+
+        assert hybrid.pool_requests == 1
+
     def test_the_reranker_reorders_the_fused_pool(self):
         class FakeReranker:
             def rerank(self, query, candidates, top_k=5):

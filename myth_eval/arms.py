@@ -107,17 +107,37 @@ class HybridArm:
         )
         return _deduplicate(list(dense_hits) + list(sparse_hits))
 
+    def fused_candidates(
+        self,
+        query: str,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[RetrievedItem]:
+        """The merged dense and sparse pool, score-ordered and untruncated.
+
+        This is the whole of the fusion rule, and the only place it lives. The
+        reranked arm needs the pool deeper than ``retrieve`` returns it and
+        without ranks reassigned, so depth is the caller's business: slice what
+        you need. Ranks are assigned by whoever returns items to a caller.
+
+        Args:
+            query: The natural-language query.
+            filters: Optional metadata filter, passed to both sub-arms.
+
+        Returns:
+            Every deduplicated candidate, ordered by raw score, best first.
+        """
+        candidates = self._candidates(query, filters)
+        # The defective sort, preserved on purpose: cosine similarity and BM25
+        # are not on a common scale.
+        return sorted(candidates, key=lambda item: item.score, reverse=True)
+
     def retrieve(
         self,
         query: str,
         k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[RetrievedItem]:
-        candidates = self._candidates(query, filters)
-        # The defective sort, preserved on purpose: cosine similarity and BM25
-        # are not on a common scale.
-        fused = sorted(candidates, key=lambda item: item.score, reverse=True)
-        return _renumber(fused[:k])
+        return _renumber(self.fused_candidates(query, filters)[:k])
 
 
 class RerankedArm:
@@ -146,9 +166,7 @@ class RerankedArm:
         k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[RetrievedItem]:
-        candidates = self._hybrid._candidates(query, filters)
-        pool = sorted(candidates, key=lambda item: item.score, reverse=True)
-        pool = pool[: self._pool_size]
+        pool = self._hybrid.fused_candidates(query, filters)[: self._pool_size]
         if not pool:
             return []
 
