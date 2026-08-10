@@ -13,3 +13,7 @@ The five canonical triage roles, each label string equal to its name. See `docs/
 ### Domain docs
 
 Single-context — one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
+### Formatting and linting
+
+ruff, and only ruff — `make fmt` to format, `make lint` to report. Not black, not isort: neither is installed. See `docs/agents/formatting.md`.
