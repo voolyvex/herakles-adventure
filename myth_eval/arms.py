@@ -37,8 +37,9 @@ __all__ = [
 ]
 
 # The canonical reporting order, and the single source of every arm name. The
-# four below are unpacked from it rather than written out again, so the arms
-# this module builds cannot drift from the tuple that names them.
+# four below are unpacked from it rather than written out again, so no arm name
+# is spelled twice in the codebase. The unpacking is positional: reordering the
+# tuple reorders these bindings with it, so keep the two in step.
 ARM_NAMES = ("dense", "sparse", "hybrid", "hybrid_rerank")
 DENSE, SPARSE, HYBRID, HYBRID_RERANK = ARM_NAMES
 

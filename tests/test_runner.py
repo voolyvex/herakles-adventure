@@ -401,16 +401,34 @@ class TestTheFusedCandidatePool:
 
 class TestRerankedArm:
     def test_it_takes_its_pool_through_the_hybrid_arms_interface(self):
-        """No private attribute, and no second sort of its own."""
+        """Through ``fused_candidates``, and never past it.
+
+        The private ``_candidates`` is made to fail here, so reaching for it —
+        which is what this arm used to do — cannot pass silently.
+        """
 
         class RecordingHybrid(HybridArm):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self.pool_requests = 0
+                self._inside_fusion = False
 
             def fused_candidates(self, query, filters=None):
                 self.pool_requests += 1
-                return super().fused_candidates(query, filters)
+                self._inside_fusion = True
+                try:
+                    return super().fused_candidates(query, filters)
+                finally:
+                    self._inside_fusion = False
+
+            def _candidates(self, query, filters):
+                # Legitimate when fusion itself is asking; a reach past the
+                # interface otherwise, which is what this arm used to do.
+                if not self._inside_fusion:
+                    raise AssertionError(
+                        "the reranked arm must not reach past fused_candidates"
+                    )
+                return super()._candidates(query, filters)
 
         class FakeReranker:
             def rerank(self, query, candidates, top_k=5):
@@ -536,16 +554,50 @@ class TestAdaptingARetrievalStack:
 
         assert "sparse" in str(raised.value).lower()
 
-    def test_the_refusal_reports_nothing_rather_than_zeros(self):
-        """No partial matrix escapes: the caller gets an exception, not arms."""
+    def test_the_refusal_reaches_the_command_rather_than_scoring_zeros(
+        self, dataset, tmp_path
+    ):
+        """The refusal has to escape the whole command, not just the adapter.
+
+        Were it swallowed anywhere above, the run would proceed with a matrix
+        missing its sparse and hybrid arms and write that to the results file —
+        which is the exact silent degradation the guard exists to prevent.
+        """
+        from myth_eval import cli
+
+        output = tmp_path / "results.json"
+
+        # Stand in for the live stack at the seam, so no index is needed.
+        def build(embedding_model=None, with_reranker=True):
+            return adapt_stack(
+                self.Stack(dense=object(), sparse=None, reranker=None),
+                with_reranker,
+            )
+
+        original = cli.build_live_arms
+        cli.build_live_arms = build
+        try:
+            with pytest.raises(RuntimeError):
+                cli.main(["--output", str(output)])
+        finally:
+            cli.build_live_arms = original
+
+        assert not output.exists(), "a refused run must write no results file"
+
+    def test_it_names_the_failure_so_the_operator_can_act(self):
         stack = self.Stack(dense=object(), sparse=None, reranker=object())
 
-        try:
-            adapted = adapt_stack(stack)
-        except RuntimeError:
-            adapted = None
+        with pytest.raises(RuntimeError, match="silently score them zero"):
+            adapt_stack(stack)
 
-        assert adapted is None
+    def test_it_refuses_when_the_dense_retriever_failed_to_initialise(self):
+        """The same reasoning as sparse: no arm is measurable without dense."""
+        stack = self.Stack(dense=None, sparse=object(), reranker=object())
+
+        with pytest.raises(RuntimeError) as raised:
+            adapt_stack(stack)
+
+        assert "dense" in str(raised.value).lower()
 
     def test_a_whole_stack_adapts_to_the_protocol(self):
         reranker = object()
@@ -570,7 +622,7 @@ class TestNoHeavyDependencies:
         """The property that makes Seam 2 useful."""
         import sys
 
-        for forbidden in ("chromadb", "sentence_transformers", "flashrank"):
+        for forbidden in ("torch", "chromadb", "sentence_transformers", "flashrank"):
             assert forbidden not in sys.modules, (
                 f"{forbidden} was imported; the runner suite must stay free of it"
             )

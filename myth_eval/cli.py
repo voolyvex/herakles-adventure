@@ -15,9 +15,9 @@ the retrieval protocol, so ``--fake`` runs the identical code path against
 scripted retrievers in milliseconds.
 
 Identical is meant literally, assembly included: both paths hand their adapters
-to :func:`myth_eval.arms.build_arms` and neither names an arm itself. The only
-thing this module chooses is which adapters to supply — the live stack, or the
-scripted ones.
+to :func:`myth_eval.arms.build_arms`, which is the only thing that decides what
+the matrix contains and what each arm is called. The one choice left to this
+module is which adapters to supply — the live stack, or the scripted ones.
 """
 
 from __future__ import annotations
