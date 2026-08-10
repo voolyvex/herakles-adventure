@@ -58,8 +58,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
-    "black>=23.0.0",
-    "isort>=5.0.0",
+    # ruff replaces black and isort both: `ruff format` is black-compatible and
+    # the `I` rules are isort. One tool, one config, and nothing to keep in
+    # agreement. Listing all three only invites reaching for whichever comes to
+    # mind first — see [tool.ruff] below for the settings.
+    "ruff>=0.6.0",
     "mypy>=1.0.0",
 ]
 # Windows + AMD GPU acceleration. Opt-in: torch-directml publishes no Linux
@@ -117,6 +120,43 @@ markers = [
     # heavy test must import them inside the test body, never at module level.
     "heavy: requires the embedding model and vector store",
 ]
+
+[tool.ruff]
+# The default 88, kept explicit because it is a decision rather than an
+# oversight: myth_eval/ and tests/ are already hand-wrapped to it, and a wider
+# limit would have the formatter *un*-wrap that code into longer lines than
+# anyone wrote by hand. target-version is deliberately absent — ruff reads it
+# from requires-python above, and a second copy here could disagree with it.
+line-length = 88
+
+# .scratch/ holds the issue tracker (see AGENTS.md): specs and tickets, some
+# carrying python in fenced blocks that ruff formats as if it were source.
+# Prose about code is not code, and a ticket should read as it was written.
+extend-exclude = [".scratch"]
+
+[tool.ruff.lint]
+# E and F are pyflakes plus the pycodestyle errors; I is isort, which is why
+# isort is no longer a dependency. This is the floor, not a ceiling — the point
+# is a set that runs clean enough to be worth reading, so a real finding is not
+# buried in a few hundred stylistic ones. Widen it when the existing findings
+# are paid down, not before.
+select = ["E", "F", "I"]
+# W and UP were considered and left out: a few hundred findings between them,
+# almost entirely trailing whitespace and py3.9-era typing that the formatter
+# has no opinion about. Neither is worth the noise until this set runs clean.
+# The formatter owns line length. Leaving E501 on as well means a long line is
+# reported by `ruff check` and then left alone by `ruff format`, which will not
+# split a long string or comment — a report no tool here can act on.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# These three extend sys.path, set TOKENIZERS_PARALLELISM and friends, and quiet
+# the loggers *before* importing torch and transformers, which read that state at
+# import time. The order is load-bearing, so the imports cannot all move to the
+# top of the file — E402 here reports the design rather than a mistake.
+"rag_system.py" = ["E402"]
+"agents/dense_retriever.py" = ["E402"]
+"agents/summarizer.py" = ["E402"]
 
 [tool.uv]
 # UV-specific settings can go here
